@@ -96,6 +96,10 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
 
   useEffect(() => {
     if (!enabled || !roomId || !artistId || !role) {
+      setStatus('idle');
+      setError(null);
+      setLocalStream(null);
+      setRemoteStream(null);
       return undefined;
     }
 
@@ -146,10 +150,19 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
 
       try {
         const stream = await ensureArtistMedia();
+
+        // Safely close pre-existing peer connection for this listener
+        const existingPeer = artistPeersRef.current.get(payload.listenerId);
+        if (existingPeer) {
+          try {
+            existingPeer.close();
+          } catch (e) {
+            console.error('[PALCO media] erro ao fechar peer anterior do artista para listener:', payload.listenerId, e);
+          }
+        }
+
         const peer = new RTCPeerConnection(RTC_CONFIG);
         artistPeersRef.current.set(payload.listenerId, peer);
-
-        stream.getTracks().forEach((track) => peer.addTrack(track, stream));
 
         peer.onicecandidate = (event) => {
           if (!event.candidate) return;
@@ -169,7 +182,11 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
           }
         };
 
+        // Unified Plan: remote description MUST be set before calling addTrack so the browser
+        // associates the local track to the correct remote transceiver.
         await peer.setRemoteDescription(new RTCSessionDescription(payload.offer));
+
+        stream.getTracks().forEach((track) => peer.addTrack(track, stream));
 
         // Flush queued candidates
         const queue = iceQueuesRef.current.get(payload.listenerId) || [];
@@ -205,6 +222,16 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
       if (role !== 'listener') return;
 
       listenerIdRef.current = getListenerId();
+
+      // Safely close pre-existing listener peer connection
+      if (listenerPeerRef.current) {
+        try {
+          listenerPeerRef.current.close();
+        } catch (e) {
+          console.error('[PALCO media] erro ao fechar peer anterior do listener:', e);
+        }
+      }
+
       const peer = new RTCPeerConnection(RTC_CONFIG);
       listenerPeerRef.current = peer;
 
@@ -272,6 +299,27 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
           artistPeersRef.current.delete(payload.listenerId);
         }
       })
+      .on('broadcast', { event: 'artist-ready' }, ({ payload }) => {
+        if (payload.senderSessionId === sessionIdRef.current) return;
+        if (role !== 'listener') return;
+        if (payload.artistId !== artistId) return;
+        console.log('[PALCO media] artista ficou pronto para transmitir, iniciando offer...');
+        startListenerOffer();
+      })
+      .on('broadcast', { event: 'artist-leave' }, ({ payload }) => {
+        if (payload.senderSessionId === sessionIdRef.current) return;
+        if (role !== 'listener') return;
+        if (payload.artistId !== artistId) return;
+        console.log('[PALCO media] artista encerrou transmissão, limpando conexão...');
+        clearRemoteStream();
+        if (listenerPeerRef.current) {
+          try {
+            listenerPeerRef.current.close();
+          } catch (e) {}
+          listenerPeerRef.current = null;
+        }
+        setStatus('waiting_artist');
+      })
       .on('broadcast', { event: 'artist-answer' }, async ({ payload }) => {
         if (payload.senderSessionId === sessionIdRef.current) return;
         if (role !== 'listener') return;
@@ -336,6 +384,8 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
           if (role === 'artist') {
             await ensureArtistMedia();
             setStatus('ready');
+            // Notify any active waiting listeners that the stream is ready
+            sendSignal('artist-ready', { artistId });
           } else {
             await startListenerOffer();
           }
@@ -355,6 +405,10 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
         sendSignal('listener-leave', {
           artistId,
           listenerId: listenerIdRef.current,
+        }).catch(() => {});
+      } else if (role === 'artist') {
+        sendSignal('artist-leave', {
+          artistId,
         }).catch(() => {});
       }
       closeAllPeers();

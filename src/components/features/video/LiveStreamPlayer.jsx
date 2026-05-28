@@ -83,6 +83,15 @@ export default function LiveStreamPlayer({
               {STATUS_LABELS[status] || 'Conectando...'}
             </p>
           )}
+          {isStarted && error && onStart && (
+            <button
+              type="button"
+              onClick={onStart}
+              className="mt-5 rounded-xl bg-palco-gold px-5 py-3 text-sm font-black text-palco-black transition hover:bg-palco-gold-light"
+            >
+              Tentar novamente
+            </button>
+          )}
         </div>
       )}
 

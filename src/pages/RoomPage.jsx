@@ -434,7 +434,14 @@ function DesktopLiveRoom({
               initial={selectedArtist.name.charAt(0).toUpperCase()}
               canStart
               isStarted={listenEnabled}
-              onStart={() => setListenEnabled(true)}
+              onStart={() => {
+                if (listenerMedia.error) {
+                  setListenEnabled(false);
+                  setTimeout(() => setListenEnabled(true), 50);
+                } else {
+                  setListenEnabled(true);
+                }
+              }}
               actionLabel="Ouvir ao vivo"
               className="h-full w-full border-0"
               showInfo={false}
@@ -756,7 +763,14 @@ export default function RoomPage() {
             initial={selectedArtist.name.charAt(0).toUpperCase()}
             canStart
             isStarted={listenEnabled}
-            onStart={() => setListenEnabled(true)}
+            onStart={() => {
+              if (listenerMedia.error) {
+                setListenEnabled(false);
+                setTimeout(() => setListenEnabled(true), 50);
+              } else {
+                setListenEnabled(true);
+              }
+            }}
             actionLabel="Ouvir ao vivo"
             className="absolute inset-0 h-full rounded-none border-0"
             showInfo={false}

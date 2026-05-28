@@ -573,7 +573,14 @@ export default function PublicInteractionPage() {
           initial={selectedArtist.name.charAt(0).toUpperCase()}
           canStart
           isStarted={listenEnabled}
-          onStart={() => setListenEnabled(true)}
+          onStart={() => {
+            if (listenerMedia.error) {
+              setListenEnabled(false);
+              setTimeout(() => setListenEnabled(true), 50);
+            } else {
+              setListenEnabled(true);
+            }
+          }}
           actionLabel="Ouvir ao vivo"
           className="absolute inset-0 h-full rounded-none border-0"
         />
