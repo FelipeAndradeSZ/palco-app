@@ -2,7 +2,12 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import Stripe from 'https://esm.sh/stripe@14.17.0'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') as string, {
+const stripeSecretKey = Deno.env.get('STRIPE_SECRET_KEY')
+const supabaseUrl = Deno.env.get('SUPABASE_URL')
+const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')
+const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+
+const stripe = new Stripe(stripeSecretKey as string, {
   apiVersion: '2023-10-16',
 })
 
@@ -17,6 +22,11 @@ serve(async (req) => {
   }
 
   try {
+    if (!stripeSecretKey) throw new Error('STRIPE_SECRET_KEY nao configurada no Supabase')
+    if (!supabaseUrl) throw new Error('SUPABASE_URL nao configurada no Supabase')
+    if (!supabaseAnonKey) throw new Error('SUPABASE_ANON_KEY nao configurada no Supabase')
+    if (!supabaseServiceRoleKey) throw new Error('SUPABASE_SERVICE_ROLE_KEY nao configurada no Supabase')
+
     const authHeader = req.headers.get('Authorization')
     const { sessionId } = await req.json()
 
@@ -24,8 +34,8 @@ serve(async (req) => {
     if (!sessionId) throw new Error('Sessao de pagamento ausente')
 
     const supabaseAuth = createClient(
-      Deno.env.get('SUPABASE_URL') as string,
-      Deno.env.get('SUPABASE_ANON_KEY') as string,
+      supabaseUrl,
+      supabaseAnonKey,
       { global: { headers: { Authorization: authHeader } } }
     )
 
@@ -45,8 +55,8 @@ serve(async (req) => {
     }
 
     const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') as string,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') as string
+      supabaseUrl,
+      supabaseServiceRoleKey
     )
 
     const { data, error } = await supabaseAdmin.rpc('credit_wallet_topup', {
@@ -62,6 +72,7 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error) {
+    console.error('[PALCO confirm-checkout]', error)
     return new Response(
       JSON.stringify({ ok: false, error: error.message }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

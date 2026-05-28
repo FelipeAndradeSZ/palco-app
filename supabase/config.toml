@@ -23,6 +23,6 @@ entrypoint = "./functions/stripe-webhook/index.ts"
 
 [functions.confirm-checkout]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/confirm-checkout/deno.json"
 entrypoint = "./functions/confirm-checkout/index.ts"

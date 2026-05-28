@@ -41,7 +41,20 @@ export async function confirmCheckoutSession(sessionId) {
     body: { sessionId },
   });
 
-  if (error) throw error;
+  if (error) {
+    let details = null;
+
+    try {
+      if (error.context) {
+        details = await error.context.json();
+      }
+    } catch {
+      details = null;
+    }
+
+    throw new Error(details?.error || error.message || 'Nao foi possivel confirmar o pagamento.');
+  }
+
   if (!data?.ok) throw new Error(data?.error || 'Nao foi possivel confirmar o pagamento.');
 
   return data;
