@@ -10,6 +10,7 @@ import Spinner from '../components/ui/Spinner';
 import Badge from '../components/ui/Badge';
 import RequestSongModal from '../components/features/bounty/RequestSongModal';
 import LiveStreamPlayer from '../components/features/video/LiveStreamPlayer';
+import TikTokInteractions from '../components/features/video/TikTokInteractions';
 import { getActiveArtists } from '../lib/roomArtists';
 import { BOUNTY_PRESETS } from '../lib/constants';
 import { sanitizeText, validateBountyValue, validateChatMessage } from '../lib/validators';
@@ -197,6 +198,7 @@ function LiveActions({
   onTip,
   onVote,
   votes,
+  userVotes = [],
   feedback,
 }) {
   const actions = [
@@ -301,24 +303,33 @@ function LiveActions({
 
       {activeAction === 'vote' && (
         <div className="space-y-2">
-          {VOTE_OPTIONS.map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => onVote(key, label)}
-              className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3 text-left transition hover:border-palco-gold/50"
-            >
-              <span className="font-bold text-white">{label}</span>
-              <span className="rounded-full bg-palco-gold/15 px-3 py-1 text-xs font-black text-palco-gold">
-                {votes[key]} votos
-              </span>
-            </button>
-          ))}
+          {VOTE_OPTIONS.map(([key, label]) => {
+            const hasVoted = userVotes?.includes(key);
+            return (
+              <button
+                key={key}
+                type="button"
+                disabled={hasVoted}
+                onClick={() => onVote(key, label)}
+                className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left transition ${
+                  hasVoted
+                    ? 'border-palco-success/20 bg-palco-success/5 text-palco-success/70 cursor-not-allowed'
+                    : 'border-white/10 bg-white/[0.05] text-white hover:border-palco-gold/50'
+                }`}
+              >
+                <span className="font-bold">{label} {hasVoted && '✓'}</span>
+                <span className="rounded-full bg-palco-gold/15 px-3 py-1 text-xs font-black text-palco-gold">
+                  {votes[key] || 0} Votos
+                </span>
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
+
 
 function DesktopLiveRoom({
   room,
@@ -348,8 +359,12 @@ function DesktopLiveRoom({
   handleTipSubmit,
   handleVote,
   votes,
+  userVotes,
   feedback,
   openRequestModal,
+  incomingLike,
+  sendLike,
+  tvAlerts,
 }) {
   return (
     <div className="mx-auto min-h-[calc(100vh-4rem)] max-w-7xl px-5 py-6">
@@ -381,19 +396,29 @@ function DesktopLiveRoom({
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
         <div className="min-w-0 space-y-5">
-          <LiveStreamPlayer
-            stream={listenerMedia.remoteStream}
-            status={listenEnabled ? listenerMedia.status : 'idle'}
-            error={listenerMedia.error}
-            title={selectedArtist.name}
-            subtitle={selectedArtist.current_song || selectedArtist.main_genre || 'Tocando ao vivo'}
-            initial={selectedArtist.name.charAt(0).toUpperCase()}
-            canStart
-            isStarted={listenEnabled}
-            onStart={() => setListenEnabled(true)}
-            actionLabel="Ouvir ao vivo"
-            className="aspect-video"
-          />
+          <div className="relative aspect-video w-full overflow-hidden rounded-2xl">
+            <LiveStreamPlayer
+              stream={listenerMedia.remoteStream}
+              status={listenEnabled ? listenerMedia.status : 'idle'}
+              error={listenerMedia.error}
+              title={selectedArtist.name}
+              subtitle={selectedArtist.current_song || selectedArtist.main_genre || 'Tocando ao vivo'}
+              initial={selectedArtist.name.charAt(0).toUpperCase()}
+              canStart
+              isStarted={listenEnabled}
+              onStart={() => setListenEnabled(true)}
+              actionLabel="Ouvir ao vivo"
+              className="h-full w-full border-0"
+              showInfo={false}
+            />
+            {listenEnabled && listenerMedia.status === 'live' && (
+              <TikTokInteractions
+                incomingLike={incomingLike}
+                onSendLike={(x, y) => sendLike(x, y)}
+                activeAlerts={tvAlerts}
+              />
+            )}
+          </div>
 
           <section className="rounded-2xl border border-palco-border bg-palco-card p-4">
             <div className="mb-4 flex items-center gap-3">
@@ -442,6 +467,7 @@ function DesktopLiveRoom({
               onTip={handleTipSubmit}
               onVote={handleVote}
               votes={votes}
+              userVotes={userVotes}
               feedback={feedback}
             />
           )}
@@ -470,7 +496,7 @@ export default function RoomPage() {
   const [tipMessage, setTipMessage] = useState('');
   const [tipLoading, setTipLoading] = useState(false);
   const [feedback, setFeedback] = useState(null);
-  const [votes, setVotes] = useState({ voice: 0, repertoire: 0, presence: 0 });
+
 
   const handleRoomUpdate = useCallback(async () => {
     const { data: fullRoom } = await getRoomById(roomId);
@@ -482,9 +508,14 @@ export default function RoomPage() {
     ? activeArtists.find((artist) => artist.id === selectedArtistId) || null
     : null;
 
-  const { messages, isConnected, sendChatMessage } = useRoomRealtime(roomId, {
+  const [incomingLike, setIncomingLike] = useState(null);
+
+  const { messages, isConnected, sendChatMessage, votes, userVotes, castVote, sendLike, tvAlerts } = useRoomRealtime(roomId, {
     onRoomUpdate: handleRoomUpdate,
     targetArtistId: selectedArtist?.id || null,
+    onLikeReceived: (payload) => {
+      setIncomingLike({ x: payload.x, y: payload.y, timestamp: Date.now() });
+    },
   });
 
   const listenerMedia = useRoomMediaStream({
@@ -614,9 +645,14 @@ export default function RoomPage() {
   }
 
   async function handleVote(key, label) {
-    setVotes((prev) => ({ ...prev, [key]: prev[key] + 1 }));
-    setFeedback({ type: 'success', message: `Voto registrado: ${label}.` });
-    await sendChatMessage(`Votou em "${label}" para ${selectedArtist.name}.`);
+    try {
+      const { error } = await castVote(key);
+      if (error) throw error;
+      setFeedback({ type: 'success', message: `Voto registrado para a ${label} do artista!` });
+      await sendChatMessage(`Votou em "${label}" para ${selectedArtist.name}.`);
+    } catch (err) {
+      setFeedback({ type: 'error', message: err.message || 'Não foi possível registrar seu voto.' });
+    }
   }
 
   if (loading || !room) {
@@ -668,8 +704,12 @@ export default function RoomPage() {
           handleTipSubmit={handleTipSubmit}
           handleVote={handleVote}
           votes={votes}
+          userVotes={userVotes}
           feedback={feedback}
           openRequestModal={() => setIsModalOpen(true)}
+          incomingLike={incomingLike}
+          sendLike={sendLike}
+          tvAlerts={tvAlerts}
         />
       </div>
 
@@ -689,6 +729,15 @@ export default function RoomPage() {
             className="absolute inset-0 h-full rounded-none border-0"
             showInfo={false}
           />
+
+          {listenEnabled && listenerMedia.status === 'live' && (
+            <TikTokInteractions
+              incomingLike={incomingLike}
+              onSendLike={(x, y) => sendLike(x, y)}
+              activeAlerts={tvAlerts}
+              className="absolute inset-0 w-full h-full"
+            />
+          )}
 
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-black/10 to-black/75" />
 
@@ -748,6 +797,19 @@ export default function RoomPage() {
                   {label}
                 </button>
               ))}
+              <button
+                type="button"
+                onClick={() => {
+                  const x = 50 + Math.random() * 20 - 10;
+                  const y = 70 + Math.random() * 10;
+                  sendLike(x, y);
+                  setIncomingLike({ x, y, timestamp: Date.now() });
+                }}
+                className="flex h-12 w-12 items-center justify-center rounded-full text-lg shadow-lg backdrop-blur bg-red-500/25 border border-red-500/30 text-red-400 active:scale-95 transition"
+                title="Curtir"
+              >
+                ❤️
+              </button>
             </div>
           )}
         </section>
@@ -768,6 +830,7 @@ export default function RoomPage() {
               onTip={handleTipSubmit}
               onVote={handleVote}
               votes={votes}
+              userVotes={userVotes}
               feedback={feedback}
             />
           </div>

@@ -4,6 +4,7 @@ import { getRecentMessages, sendMessage } from '../services/chatService';
 import { getActiveRequests } from '../services/bountyService';
 import { getProfile } from '../services/profileService';
 import { useAuth } from './useAuth';
+import { supabase } from '../lib/supabase';
 
 export function useRoomRealtime(roomId, options = {}) {
   const { user } = useAuth();
@@ -12,6 +13,8 @@ export function useRoomRealtime(roomId, options = {}) {
   const [messages, setMessages] = useState([]);
   const [activeRequests, setActiveRequests] = useState([]);
   const [tvAlerts, setTvAlerts] = useState([]);
+  const [votes, setVotes] = useState({ voice: 0, repertoire: 0, presence: 0 });
+  const [userVotes, setUserVotes] = useState([]);
   const [isConnected, setIsConnected] = useState(false);
   const channelRef = useRef(null);
 
@@ -52,6 +55,21 @@ export function useRoomRealtime(roomId, options = {}) {
 
         const { data: requests } = await getActiveRequests(roomId, targetArtistId);
         if (isMounted && requests) setActiveRequests(requests);
+
+        if (targetArtistId) {
+          const { data: votesData } = await supabase.rpc('get_artist_votes', {
+            p_room_id: roomId,
+            p_artist_id: targetArtistId,
+          });
+          if (isMounted && votesData) {
+            setVotes({
+              voice: votesData.voice || 0,
+              repertoire: votesData.repertoire || 0,
+              presence: votesData.presence || 0,
+            });
+            setUserVotes(votesData.user_votes || []);
+          }
+        }
       } catch (err) {
         console.error('[useRoomRealtime] Erro ao hidratar dados iniciais:', err);
       }
@@ -108,6 +126,20 @@ export function useRoomRealtime(roomId, options = {}) {
       onRoomUpdate: (updatedRoom) => {
         if (isMounted && onRoomUpdate) onRoomUpdate(updatedRoom);
       },
+      onVoteCast: (newVote) => {
+        if (!isMounted) return;
+        if (targetArtistId && newVote.artist_id !== targetArtistId) return;
+
+        setVotes((prev) => ({
+          ...prev,
+          [newVote.category]: (prev[newVote.category] || 0) + 1,
+        }));
+      },
+      onLikeTap: (payload) => {
+        if (isMounted && options.onLikeReceived) {
+          options.onLikeReceived(payload);
+        }
+      },
     });
 
     channelRef.current = channel;
@@ -131,5 +163,31 @@ export function useRoomRealtime(roomId, options = {}) {
     return result;
   }, [appendMessage, resolveMessageSender, roomId, userId]);
 
-  return { messages, activeRequests, tvAlerts, isConnected, sendChatMessage };
+  const castVote = useCallback(async (category) => {
+    if (!userId || !roomId || !targetArtistId) return { error: new Error('Não autorizado') };
+
+    const { data, error } = await supabase.rpc('cast_artist_vote', {
+      p_room_id: roomId,
+      p_artist_id: targetArtistId,
+      p_category: category,
+    });
+
+    if (!error && data?.success) {
+      setUserVotes((prev) => [...prev, category]);
+    }
+
+    return { data, error };
+  }, [roomId, targetArtistId, userId]);
+
+  const sendLike = useCallback(async (x = 50, y = 50) => {
+    if (!channelRef.current) return;
+    await channelRef.current.send({
+      type: 'broadcast',
+      event: 'like_tap',
+      payload: { x, y, senderName: user?.name || 'Ouvinte' },
+    });
+  }, [user]);
+
+  return { messages, activeRequests, tvAlerts, isConnected, sendChatMessage, votes, userVotes, castVote, sendLike };
 }
+

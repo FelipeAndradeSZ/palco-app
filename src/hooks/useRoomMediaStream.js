@@ -17,6 +17,32 @@ function getListenerId() {
   return next;
 }
 
+function optimizeSdp(sdp) {
+  let lines = sdp.split('\r\n');
+  let inVideoSection = false;
+  let newLines = [];
+
+  for (let line of lines) {
+    if (line.startsWith('a=fmtp:') && line.includes('useinbandfec=1')) {
+      line = line.replace('useinbandfec=1', 'useinbandfec=1;maxaveragebitrate=256000;stereo=1;sprop-stereo=1;cbr=1');
+    }
+
+    if (line.startsWith('m=video')) {
+      inVideoSection = true;
+    } else if (line.startsWith('m=')) {
+      inVideoSection = false;
+    }
+
+    newLines.push(line);
+
+    if (inVideoSection && line.startsWith('c=IN')) {
+      newLines.push('b=AS:2500');
+      inVideoSection = false;
+    }
+  }
+  return newLines.join('\r\n');
+}
+
 export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
@@ -96,9 +122,11 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
 
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+          latency: 0,
+          channelCount: 2,
         },
         video: {
           width: { ideal: 1280 },
@@ -142,12 +170,16 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
 
         await peer.setRemoteDescription(new RTCSessionDescription(payload.offer));
         const answer = await peer.createAnswer();
-        await peer.setLocalDescription(answer);
+        const optimizedAnswer = new RTCSessionDescription({
+          type: answer.type,
+          sdp: optimizeSdp(answer.sdp),
+        });
+        await peer.setLocalDescription(optimizedAnswer);
 
         await sendSignal('artist-answer', {
           artistId,
           listenerId: payload.listenerId,
-          answer,
+          answer: optimizedAnswer,
         });
       } catch (err) {
         console.error('[PALCO media] erro ao responder listener:', err);
@@ -194,7 +226,11 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
       };
 
       const offer = await peer.createOffer();
-      await peer.setLocalDescription(offer);
+      const optimizedOffer = new RTCSessionDescription({
+        type: offer.type,
+        sdp: optimizeSdp(offer.sdp),
+      });
+      await peer.setLocalDescription(optimizedOffer);
 
       peer.getSenders().forEach((sender) => {
         if (sender.track) sender.track.stop();
@@ -204,7 +240,7 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
       await sendSignal('listener-offer', {
         artistId,
         listenerId: listenerIdRef.current,
-        offer,
+        offer: optimizedOffer,
       });
       setStatus('waiting_artist');
     }
@@ -213,6 +249,15 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
       .on('broadcast', { event: 'listener-offer' }, ({ payload }) => {
         if (payload.senderSessionId === sessionIdRef.current) return;
         answerListenerOffer(payload);
+      })
+      .on('broadcast', { event: 'listener-leave' }, ({ payload }) => {
+        if (payload.senderSessionId === sessionIdRef.current) return;
+        if (role !== 'artist') return;
+        const peer = artistPeersRef.current.get(payload.listenerId);
+        if (peer) {
+          peer.close();
+          artistPeersRef.current.delete(payload.listenerId);
+        }
       })
       .on('broadcast', { event: 'artist-answer' }, async ({ payload }) => {
         if (payload.senderSessionId === sessionIdRef.current) return;
@@ -266,6 +311,12 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
 
     return () => {
       cancelled = true;
+      if (role === 'listener' && listenerIdRef.current) {
+        sendSignal('listener-leave', {
+          artistId,
+          listenerId: listenerIdRef.current,
+        }).catch(() => {});
+      }
       closeAllPeers();
       stopLocalStream();
       clearRemoteStream();

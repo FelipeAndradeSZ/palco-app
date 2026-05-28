@@ -9,6 +9,8 @@ export function subscribeToRoom(roomId, {
   onSongRequestUpdate,
   onRoomUpdate,
   onConnectionStatus,
+  onVoteCast,
+  onLikeTap,
 } = {}) {
   const channel = supabase.channel(`room:${roomId}`);
 
@@ -24,6 +26,20 @@ export function subscribeToRoom(roomId, {
       if (onNewMessage) onNewMessage(payload.new);
     }
   );
+
+  channel.on(
+    'postgres_changes',
+    {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'artist_votes',
+      filter: `room_id=eq.${roomId}`,
+    },
+    (payload) => {
+      if (onVoteCast) onVoteCast(payload.new);
+    }
+  );
+
 
   channel.on(
     'postgres_changes',
@@ -54,6 +70,14 @@ export function subscribeToRoom(roomId, {
     },
     (payload) => {
       if (onRoomUpdate) onRoomUpdate(payload.new);
+    }
+  );
+
+  channel.on(
+    'broadcast',
+    { event: 'like_tap' },
+    ({ payload }) => {
+      if (onLikeTap) onLikeTap(payload);
     }
   );
 
