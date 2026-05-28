@@ -63,10 +63,7 @@ export default function RegisterForm({ onSubmit, loading, error }) {
   }
 
   const handleOAuth = async (provider) => {
-    // Salva a role selecionada (se houver) para resgatar na volta do OAuth
-    if (form.role) {
-      localStorage.setItem('@palco/pending_role', form.role);
-    }
+    // Agora o Google sempre vai abrir o modal de onboarding para usuários novos (sem role pendente injetada)
     const { error } = await signInWithOAuth(provider);
     if (error) console.error('OAuth Error:', error);
   };

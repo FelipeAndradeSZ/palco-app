@@ -14,6 +14,8 @@ import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import ArtistRequestQueue from '../components/features/bounty/ArtistRequestQueue';
+import ChatBox from '../components/features/chat/ChatBox';
+import LocalCamera from '../components/features/video/LocalCamera';
 import { QUALITY_TIER_LABELS } from '../lib/constants';
 
 export default function ArtistDashboardPage() {
@@ -24,8 +26,8 @@ export default function ArtistDashboardPage() {
   const [activeRoomId, setActiveRoomId] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Hook realtime para gerenciar fila quando ao vivo
-  const { activeRequests } = useRoomRealtime(activeRoomId);
+  // Hook realtime para gerenciar fila e chat quando ao vivo
+  const { activeRequests, messages, isConnected, sendChatMessage } = useRoomRealtime(activeRoomId);
 
   const artistDetails = profile?.artist_details?.[0] || profile?.artist_details || {};
   const tierLabel = QUALITY_TIER_LABELS[artistDetails.quality_tier] || 'Bronze';
@@ -132,18 +134,40 @@ export default function ArtistDashboardPage() {
 
       {/* Conteúdo Dinâmico (Ao Vivo vs Offline) */}
       {activeRoomId ? (
-        <div className="mt-8">
-          <div className="flex items-center gap-4 mb-6 p-4 bg-palco-live/10 border border-palco-live/30 rounded-xl">
-            <span className="text-2xl animate-pulse">🔴</span>
-            <div>
-              <p className="font-bold text-palco-live">Você está NO AR!</p>
-              <p className="text-sm text-palco-text-muted">Acompanhe os pedidos musicais abaixo em tempo real.</p>
+        <div className="mt-8 flex flex-col lg:flex-row gap-6">
+          
+          {/* Lado Esquerdo: Palco Virtual (Câmera + Pedidos) */}
+          <div className="flex-1 flex flex-col gap-6">
+            <div className="flex items-center gap-4 p-4 bg-palco-live/10 border border-palco-live/30 rounded-xl shadow-[0_0_20px_rgba(220,38,38,0.15)]">
+              <span className="text-2xl animate-pulse">🔴</span>
+              <div>
+                <p className="font-bold text-palco-live">Você está NO AR!</p>
+                <p className="text-sm text-palco-text-muted">Seu público está assistindo você tocar.</p>
+              </div>
+            </div>
+            
+            {/* Câmera Real do Artista */}
+            <LocalCamera isActive={true} />
+
+            <ArtistRequestQueue activeRequests={activeRequests} />
+          </div>
+
+          {/* Lado Direito: Interação ao Vivo (Chat) */}
+          <div className="w-full lg:w-96 flex flex-col gap-4">
+            <h3 className="font-display font-bold text-palco-text flex items-center gap-2">
+              <svg className="w-5 h-5 text-palco-gold" fill="currentColor" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+              Chat ao Vivo
+            </h3>
+            <div className="flex-1 min-h-[400px] max-h-[600px]">
+              <ChatBox 
+                messages={messages} 
+                isConnected={isConnected} 
+                onSendMessage={sendChatMessage} 
+              />
             </div>
           </div>
-          <ArtistRequestQueue activeRequests={activeRequests} />
         </div>
       ) : (
-        <div>
           <h2 className="font-display font-bold text-xl text-palco-text mb-4">
             Escolha uma sala para tocar
           </h2>
