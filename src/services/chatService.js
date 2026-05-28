@@ -63,3 +63,23 @@ export async function getRecentMessages(roomId, artistId = null, limit = 50) {
   // Reverte para ordem cronológica (mais antigas em cima)
   return { data: data ? data.reverse() : [], error };
 }
+
+/**
+ * Remove todas as mensagens de chat associadas a um artista em uma determinada sala.
+ * Utilizado para limpar o chat quando a sala/show é encerrado ou reiniciado.
+ * 
+ * @param {string} roomId 
+ * @param {string} artistId 
+ */
+export async function clearArtistChat(roomId, artistId) {
+  if (!roomId || !artistId) return { error: new Error('Room ID e Artist ID são necessários.') };
+
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .delete()
+    .eq('room_id', roomId)
+    .eq('artist_id', artistId);
+
+  return { data, error };
+}
+

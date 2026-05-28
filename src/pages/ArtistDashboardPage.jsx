@@ -5,6 +5,7 @@ import { useRooms } from '../hooks/useRooms';
 import { useRoomRealtime } from '../hooks/useRoomRealtime';
 import { useRoomMediaStream } from '../hooks/useRoomMediaStream';
 import { updateRoomArtist } from '../services/roomService';
+import { clearArtistChat } from '../services/chatService';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
@@ -162,6 +163,8 @@ export default function ArtistDashboardPage() {
   const handleGoLive = async (roomId) => {
     setIsProcessing(true);
     try {
+      // Clear database chat history of this artist in this room for a fresh show
+      await clearArtistChat(roomId, profile.id);
       await updateRoomArtist(roomId, profile.id);
       setSelectedRoomId(roomId);
       await refetchRooms();
@@ -176,6 +179,8 @@ export default function ArtistDashboardPage() {
     if (!activeRoomId) return;
     setIsProcessing(true);
     try {
+      // Clear database chat history of this artist in this room on show end
+      await clearArtistChat(activeRoomId, profile.id);
       await updateRoomArtist(activeRoomId, null, profile.id);
       setSelectedRoomId(null);
       await refetchRooms();
