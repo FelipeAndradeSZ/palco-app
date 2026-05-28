@@ -1,8 +1,6 @@
 import { QRCodeSVG } from 'qrcode.react';
 import { useNavigate } from 'react-router-dom';
-import { useRooms } from '../hooks/useRooms';
 import { useAuth } from '../hooks/useAuth';
-import RoomGrid from '../components/features/rooms/RoomGrid';
 
 const brandFlow = [
   { step: '01', title: 'Escolha uma sala', text: 'Ambientes contínuos como Sertanejo Churrasco, Pagode de Mesa e MPB Ambiente.' },
@@ -245,13 +243,8 @@ function SectionCard({ title, children, className = '' }) {
 }
 
 export default function HomePage() {
-  const { rooms, loading, error } = useRooms();
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
-
-  function handleRoomClick(room) {
-    navigate(isAuthenticated ? `/room/${room.id}` : '/login');
-  }
 
   return (
     <div className="overflow-hidden bg-palco-black">
@@ -273,10 +266,10 @@ export default function HomePage() {
             <div className="flex flex-wrap gap-3">
               <button
                 type="button"
-                onClick={() => navigate(isAuthenticated ? '/tv' : '/register')}
+                onClick={() => navigate('/rooms')}
                 className="rounded-xl bg-palco-gold px-5 py-3 text-sm font-black text-palco-black shadow-[0_0_24px_rgba(212,168,67,0.24)] transition hover:bg-palco-gold-light"
               >
-                Abrir modo ambiente
+                Ver salas ao vivo
               </button>
               <button
                 type="button"
@@ -426,26 +419,6 @@ export default function HomePage() {
             </div>
           </div>
         </div>
-      </section>
-
-      <section className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
-        <div className="mb-6 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-palco-gold">
-              Salas reais do MVP
-            </p>
-            <h2 className="font-display text-2xl font-bold text-white">Entre em uma sala ao vivo</h2>
-          </div>
-          <span className="text-sm text-palco-text-subtle">
-            {rooms.length} {rooms.length === 1 ? 'sala ativa' : 'salas ativas'}
-          </span>
-        </div>
-        <RoomGrid
-          rooms={rooms}
-          loading={loading}
-          error={error}
-          onRoomClick={handleRoomClick}
-        />
       </section>
     </div>
   );

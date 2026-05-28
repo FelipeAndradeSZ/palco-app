@@ -55,7 +55,7 @@ export default function Header() {
         {/* ---- Desktop nav ---- */}
         <nav className="hidden md:flex items-center gap-6">
           <Link
-            to="/"
+            to="/rooms"
             className="text-sm font-medium text-palco-text-muted hover:text-palco-text transition-colors no-underline"
           >
             Salas ao Vivo
@@ -85,7 +85,7 @@ export default function Header() {
           {isAuthenticated ? (
             <>
               {/* Avatar */}
-              <div className="flex items-center gap-2">
+              <Link to="/profile" className="flex items-center gap-2 no-underline">
                 {profile?.avatar_url ? (
                   <img
                     src={profile.avatar_url}
@@ -100,7 +100,7 @@ export default function Header() {
                 <span className="text-sm text-palco-text-muted max-w-[120px] truncate">
                   {profile?.name || 'Usuário'}
                 </span>
-              </div>
+              </Link>
 
               <Button variant="ghost" size="sm" onClick={handleSignOut}>
                 Sair
@@ -148,7 +148,7 @@ export default function Header() {
         <nav className="md:hidden border-t border-palco-border bg-palco-dark/95 backdrop-blur-xl animate-[slideDown_0.2s_ease-out]">
           <div className="flex flex-col gap-1 px-4 py-4">
             <Link
-              to="/"
+              to="/rooms"
               onClick={closeMobile}
               className="rounded-lg px-3 py-2.5 text-sm font-medium text-palco-text-muted hover:text-palco-text hover:bg-white/5 transition-colors no-underline"
             >
@@ -179,7 +179,7 @@ export default function Header() {
 
             {isAuthenticated ? (
               <>
-                <div className="flex items-center gap-2 px-3 py-2">
+                <Link to="/profile" onClick={closeMobile} className="flex items-center gap-2 rounded-lg px-3 py-2 no-underline hover:bg-white/5">
                   {profile?.avatar_url ? (
                     <img
                       src={profile.avatar_url}
@@ -194,7 +194,7 @@ export default function Header() {
                   <span className="text-sm text-palco-text truncate">
                     {profile?.name || 'Usuário'}
                   </span>
-                </div>
+                </Link>
                 <button
                   type="button"
                   onClick={handleSignOut}

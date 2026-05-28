@@ -16,8 +16,8 @@ import { sanitizeText, validateBountyValue, validateChatMessage } from '../lib/v
 
 const VOTE_OPTIONS = [
   ['voice', 'Melhor voz'],
-  ['repertoire', 'Melhor repertório'],
-  ['presence', 'Presença de palco'],
+  ['repertoire', 'Melhor repertorio'],
+  ['presence', 'Presenca de palco'],
 ];
 
 function ArtistAvatar({ artist, size = 'md' }) {
@@ -46,7 +46,7 @@ function ArtistSelectionScreen({ room, artists, onSelect }) {
         </div>
         <h1 className="font-display text-3xl font-black text-palco-text sm:text-4xl">{room.name}</h1>
         <p className="mt-2 max-w-2xl text-palco-text-muted">
-          Escolha um cantor para abrir a live com áudio, vídeo, chat, pedido de música, gorjeta e votação.
+          Escolha um cantor para abrir a live com audio, video, chat, pedido de musica, gorjeta e votacao.
         </p>
       </header>
 
@@ -74,19 +74,18 @@ function ArtistSelectionScreen({ room, artists, onSelect }) {
         </div>
       ) : (
         <div className="rounded-2xl border border-dashed border-palco-border bg-palco-card p-8 text-center text-palco-text-muted">
-          Nenhum artista está ao vivo nessa sala agora.
+          Nenhum artista esta ao vivo nessa sala agora.
         </div>
       )}
     </div>
   );
 }
 
-function LiveChatOverlay({ messages, isConnected, onSendMessage }) {
+function LiveChat({ messages, isConnected, onSendMessage }) {
   const [inputText, setInputText] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState(null);
-
-  const visibleMessages = messages.slice(-7);
+  const visibleMessages = messages.slice(-8);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -104,23 +103,23 @@ function LiveChatOverlay({ messages, isConnected, onSendMessage }) {
       if (result?.error) throw new Error(result.error.message);
       setInputText('');
     } catch (err) {
-      setError(err.message || 'Não foi possível enviar.');
+      setError(err.message || 'Nao foi possivel enviar.');
     } finally {
       setSending(false);
     }
   }
 
   return (
-    <div className="pointer-events-auto flex min-h-0 flex-col gap-3">
-      <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+    <div className="flex h-full min-h-0 flex-col gap-3">
+      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
         {visibleMessages.length === 0 ? (
-          <div className="rounded-2xl bg-black/35 px-4 py-3 text-sm text-palco-text-muted backdrop-blur">
+          <div className="rounded-2xl bg-black/35 px-4 py-3 text-sm text-palco-text-muted">
             Seja o primeiro a comentar.
           </div>
         ) : (
           visibleMessages.map((message) => (
-            <div key={message.id} className="w-fit max-w-[min(440px,100%)] rounded-2xl bg-black/45 px-4 py-2 text-sm text-white shadow-lg backdrop-blur">
-              <span className="mr-2 font-black text-palco-gold">{message.sender?.name || 'Usuário'}</span>
+            <div key={message.id} className="w-fit max-w-full rounded-2xl bg-black/45 px-4 py-2 text-sm text-white shadow-lg">
+              <span className="mr-2 font-black text-palco-gold">{message.sender?.name || 'Usuario'}</span>
               <span className="break-words">{message.content}</span>
             </div>
           ))
@@ -133,7 +132,7 @@ function LiveChatOverlay({ messages, isConnected, onSendMessage }) {
           onChange={(event) => setInputText(event.target.value)}
           placeholder={isConnected ? 'Comente na live...' : 'Conectando chat...'}
           disabled={!isConnected || sending}
-          className="min-w-0 flex-1 rounded-full border border-white/15 bg-black/55 px-4 py-3 text-sm text-white outline-none backdrop-blur placeholder:text-palco-text-subtle focus:border-palco-gold disabled:opacity-60"
+          className="min-w-0 flex-1 rounded-full border border-white/15 bg-black/55 px-4 py-3 text-sm text-white outline-none placeholder:text-palco-text-subtle focus:border-palco-gold disabled:opacity-60"
           maxLength={500}
         />
         <button
@@ -151,7 +150,7 @@ function LiveChatOverlay({ messages, isConnected, onSendMessage }) {
 
 function WalletTopUp({ wallet, creditAmount, setCreditAmount, creditError, setCreditError, addingFunds, onAddFunds }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-black/45 p-4 backdrop-blur">
+    <div className="rounded-2xl border border-white/10 bg-palco-card p-4">
       <p className="text-xs font-black uppercase tracking-[0.18em] text-palco-gold">Carteira</p>
       <div className="mt-3 flex items-center justify-between gap-3">
         <span className="font-display text-xl font-bold text-white">
@@ -177,7 +176,7 @@ function WalletTopUp({ wallet, creditAmount, setCreditAmount, creditError, setCr
         disabled={addingFunds}
         className="mt-3 w-full rounded-xl bg-palco-gold px-4 py-2 text-sm font-black text-palco-black transition hover:bg-palco-gold-light disabled:opacity-50"
       >
-        {addingFunds ? 'Processando...' : 'Adicionar créditos'}
+        {addingFunds ? 'Processando...' : 'Adicionar creditos'}
       </button>
       {creditError && <p className="mt-2 text-xs text-palco-live">{creditError}</p>}
     </div>
@@ -207,7 +206,7 @@ function LiveActions({
   ];
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-black/55 p-4 backdrop-blur">
+    <div className="rounded-2xl border border-white/10 bg-palco-card p-4">
       <div className="mb-4 grid grid-cols-3 gap-2">
         {actions.map(([id, label]) => (
           <button
@@ -246,7 +245,7 @@ function LiveActions({
             onClick={onRequest}
             className="mt-4 w-full rounded-xl bg-palco-gold px-4 py-3 text-sm font-black text-palco-black transition hover:bg-palco-gold-light"
           >
-            Pedir música
+            Pedir musica
           </button>
         </div>
       )}
@@ -321,6 +320,137 @@ function LiveActions({
   );
 }
 
+function DesktopLiveRoom({
+  room,
+  selectedArtist,
+  listenerMedia,
+  listenEnabled,
+  setListenEnabled,
+  messages,
+  isConnected,
+  sendChatMessage,
+  profile,
+  wallet,
+  creditAmount,
+  setCreditAmount,
+  creditError,
+  setCreditError,
+  addingFunds,
+  handleAddFunds,
+  activeAction,
+  setActiveAction,
+  tipAmount,
+  setTipAmount,
+  tipMessage,
+  setTipMessage,
+  tipLoading,
+  handleBackToArtists,
+  handleTipSubmit,
+  handleVote,
+  votes,
+  feedback,
+  openRequestModal,
+}) {
+  return (
+    <div className="mx-auto min-h-[calc(100vh-4rem)] max-w-7xl px-5 py-6">
+      <header className="mb-5 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <div className="mb-2 flex flex-wrap items-center gap-3">
+            <Badge variant="gold">{room.genre}</Badge>
+            <Badge variant="live" pulse>Ao vivo</Badge>
+          </div>
+          <h1 className="font-display text-3xl font-black text-palco-text">{selectedArtist.name}</h1>
+          <p className="mt-1 text-sm text-palco-text-muted">
+            {room.name} - {selectedArtist.current_song || selectedArtist.main_genre || 'Tocando agora'}
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="rounded-full border border-palco-border bg-palco-card px-4 py-2 text-sm text-palco-text-muted">
+            <span className="mr-2 inline-block h-2 w-2 rounded-full bg-palco-success" />
+            {room.listener_count || 0} ouvintes
+          </div>
+          <button
+            type="button"
+            onClick={handleBackToArtists}
+            className="rounded-xl border border-palco-border px-4 py-2 text-sm font-bold text-palco-text-muted transition hover:border-palco-gold/50 hover:text-palco-gold"
+          >
+            Trocar cantor
+          </button>
+        </div>
+      </header>
+
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="min-w-0 space-y-5">
+          <LiveStreamPlayer
+            stream={listenerMedia.remoteStream}
+            status={listenEnabled ? listenerMedia.status : 'idle'}
+            error={listenerMedia.error}
+            title={selectedArtist.name}
+            subtitle={selectedArtist.current_song || selectedArtist.main_genre || 'Tocando ao vivo'}
+            initial={selectedArtist.name.charAt(0).toUpperCase()}
+            canStart
+            isStarted={listenEnabled}
+            onStart={() => setListenEnabled(true)}
+            actionLabel="Ouvir ao vivo"
+            className="aspect-video"
+          />
+
+          <section className="rounded-2xl border border-palco-border bg-palco-card p-4">
+            <div className="mb-4 flex items-center gap-3">
+              <ArtistAvatar artist={selectedArtist} />
+              <div className="min-w-0">
+                <p className="truncate font-display text-xl font-black text-palco-text">{selectedArtist.name}</p>
+                <p className="truncate text-sm text-palco-text-muted">
+                  Pedidos, votos e gorjetas direcionados para este artista.
+                </p>
+              </div>
+            </div>
+            <div className="h-[320px]">
+              <LiveChat
+                messages={messages}
+                isConnected={isConnected}
+                onSendMessage={sendChatMessage}
+              />
+            </div>
+          </section>
+        </div>
+
+        <aside className="space-y-4 xl:sticky xl:top-20 xl:self-start">
+          {profile?.role === 'listener' && (
+            <WalletTopUp
+              wallet={wallet}
+              creditAmount={creditAmount}
+              setCreditAmount={setCreditAmount}
+              creditError={creditError}
+              setCreditError={setCreditError}
+              addingFunds={addingFunds}
+              onAddFunds={handleAddFunds}
+            />
+          )}
+          {profile?.role === 'listener' && (
+            <LiveActions
+              activeAction={activeAction}
+              setActiveAction={setActiveAction}
+              selectedArtist={selectedArtist}
+              wallet={wallet}
+              tipAmount={tipAmount}
+              setTipAmount={setTipAmount}
+              tipMessage={tipMessage}
+              setTipMessage={setTipMessage}
+              tipLoading={tipLoading}
+              onRequest={openRequestModal}
+              onTip={handleTipSubmit}
+              onVote={handleVote}
+              votes={votes}
+              feedback={feedback}
+            />
+          )}
+        </aside>
+      </div>
+    </div>
+  );
+}
+
 export default function RoomPage() {
   const { roomId } = useParams();
   const navigate = useNavigate();
@@ -369,7 +499,7 @@ export default function RoomPage() {
     async function setupRoom() {
       const { data: roomData, error: roomError } = await getRoomById(roomId);
       if (roomError || !roomData) {
-        navigate('/');
+        navigate('/rooms');
         return;
       }
 
@@ -410,7 +540,7 @@ export default function RoomPage() {
   const handleAddFunds = async () => {
     const amount = Number(creditAmount);
     if (!Number.isFinite(amount) || amount < 5) {
-      setCreditError('Valor mínimo: R$ 5,00');
+      setCreditError('Valor minimo: R$ 5,00');
       return;
     }
 
@@ -420,7 +550,7 @@ export default function RoomPage() {
       await addFundsCheckout(amount, profile.id);
     } catch (err) {
       console.error('Erro ao redirecionar para pagamento', err);
-      setCreditError(err.message || 'Não foi possível iniciar o pagamento.');
+      setCreditError(err.message || 'Nao foi possivel iniciar o pagamento.');
       setAddingFunds(false);
     }
   };
@@ -467,11 +597,11 @@ export default function RoomPage() {
       setFeedback({
         type: 'success',
         message: result?.data?.fallback
-          ? 'Gorjeta apareceu no chat. Aplique a migration para descontar créditos automaticamente.'
+          ? 'Gorjeta apareceu no chat. Aplique a migration para descontar creditos automaticamente.'
           : 'Gorjeta enviada para o artista.',
       });
     } catch (err) {
-      setFeedback({ type: 'error', message: err.message || 'Não foi possível enviar a gorjeta.' });
+      setFeedback({ type: 'error', message: err.message || 'Nao foi possivel enviar a gorjeta.' });
     } finally {
       setTipLoading(false);
     }
@@ -502,137 +632,141 @@ export default function RoomPage() {
   }
 
   return (
-    <div className="mx-auto min-h-[calc(100vh-4rem)] max-w-7xl px-3 py-4 sm:px-5">
-      <section className="relative min-h-[calc(100vh-6rem)] overflow-hidden rounded-3xl border border-palco-border bg-palco-black">
-        <LiveStreamPlayer
-          stream={listenerMedia.remoteStream}
-          status={listenEnabled ? listenerMedia.status : 'idle'}
-          error={listenerMedia.error}
-          title={selectedArtist.name}
-          subtitle={selectedArtist.current_song || selectedArtist.main_genre || 'Tocando ao vivo'}
-          initial={selectedArtist.name.charAt(0).toUpperCase()}
-          canStart
-          isStarted={listenEnabled}
-          onStart={() => setListenEnabled(true)}
-          actionLabel="Ouvir ao vivo"
-          className="absolute inset-0 h-full rounded-none border-0"
+    <>
+      <div className="hidden lg:block">
+        <DesktopLiveRoom
+          room={room}
+          selectedArtist={selectedArtist}
+          listenerMedia={listenerMedia}
+          listenEnabled={listenEnabled}
+          setListenEnabled={setListenEnabled}
+          messages={messages}
+          isConnected={isConnected}
+          sendChatMessage={sendChatMessage}
+          profile={profile}
+          wallet={wallet}
+          creditAmount={creditAmount}
+          setCreditAmount={setCreditAmount}
+          creditError={creditError}
+          setCreditError={setCreditError}
+          addingFunds={addingFunds}
+          handleAddFunds={handleAddFunds}
+          activeAction={activeAction}
+          setActiveAction={setActiveAction}
+          tipAmount={tipAmount}
+          setTipAmount={setTipAmount}
+          tipMessage={tipMessage}
+          setTipMessage={setTipMessage}
+          tipLoading={tipLoading}
+          handleBackToArtists={handleBackToArtists}
+          handleTipSubmit={handleTipSubmit}
+          handleVote={handleVote}
+          votes={votes}
+          feedback={feedback}
+          openRequestModal={() => setIsModalOpen(true)}
         />
+      </div>
 
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-black/10 to-black/75" />
+      <div className="mx-auto min-h-[calc(100vh-4rem)] max-w-7xl px-3 py-4 sm:px-5 lg:hidden">
+        <section className="relative min-h-[calc(100vh-6rem)] overflow-hidden rounded-3xl border border-palco-border bg-palco-black">
+          <LiveStreamPlayer
+            stream={listenerMedia.remoteStream}
+            status={listenEnabled ? listenerMedia.status : 'idle'}
+            error={listenerMedia.error}
+            title={selectedArtist.name}
+            subtitle={selectedArtist.current_song || selectedArtist.main_genre || 'Tocando ao vivo'}
+            initial={selectedArtist.name.charAt(0).toUpperCase()}
+            canStart
+            isStarted={listenEnabled}
+            onStart={() => setListenEnabled(true)}
+            actionLabel="Ouvir ao vivo"
+            className="absolute inset-0 h-full rounded-none border-0"
+            showInfo={false}
+          />
 
-        <div className="pointer-events-auto absolute left-4 right-4 top-4 flex items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={handleBackToArtists}
-            className="rounded-full border border-white/15 bg-black/45 px-4 py-2 text-sm font-bold text-white backdrop-blur transition hover:border-palco-gold/60"
-          >
-            Trocar cantor
-          </button>
-          <div className="flex items-center gap-2 rounded-full bg-black/45 px-3 py-2 text-sm text-white backdrop-blur">
-            <span className="h-2 w-2 rounded-full bg-palco-success" />
-            {room.listener_count || 0} ouvintes
-          </div>
-        </div>
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-black/10 to-black/75" />
 
-        <div className="pointer-events-none absolute bottom-4 left-4 right-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-end">
-          <div className="min-w-0">
-            <div className="pointer-events-auto mb-4 flex items-center gap-3">
-              <ArtistAvatar artist={selectedArtist} />
-              <div className="min-w-0">
-                <p className="truncate font-display text-2xl font-black text-white">{selectedArtist.name}</p>
-                <p className="truncate text-sm text-palco-text-muted">
-                  {room.name} • {selectedArtist.current_song || selectedArtist.main_genre || 'Ao vivo'}
-                </p>
-              </div>
-              <Badge variant="live" pulse>Ao vivo</Badge>
+          <div className="pointer-events-auto absolute left-4 right-4 top-16 flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={handleBackToArtists}
+              className="rounded-full border border-white/15 bg-black/45 px-4 py-2 text-sm font-bold text-white backdrop-blur transition hover:border-palco-gold/60"
+            >
+              Trocar cantor
+            </button>
+            <div className="flex items-center gap-2 rounded-full bg-black/45 px-3 py-2 text-sm text-white backdrop-blur">
+              <span className="h-2 w-2 rounded-full bg-palco-success" />
+              {room.listener_count || 0}
             </div>
-            <LiveChatOverlay
-              messages={messages}
-              isConnected={isConnected}
-              onSendMessage={sendChatMessage}
+          </div>
+
+          <div className="pointer-events-none absolute bottom-4 left-4 right-4 grid gap-4">
+            <div className="min-w-0 pr-14">
+              <div className="pointer-events-auto mb-4 flex items-center gap-3">
+                <ArtistAvatar artist={selectedArtist} />
+                <div className="min-w-0">
+                  <p className="truncate font-display text-2xl font-black text-white">{selectedArtist.name}</p>
+                  <p className="truncate text-sm text-palco-text-muted">
+                    {room.name} - {selectedArtist.current_song || selectedArtist.main_genre || 'Ao vivo'}
+                  </p>
+                </div>
+              </div>
+              <LiveChat
+                messages={messages}
+                isConnected={isConnected}
+                onSendMessage={sendChatMessage}
+              />
+            </div>
+          </div>
+
+          {profile?.role === 'listener' && (
+            <div className="pointer-events-auto absolute right-3 top-1/2 flex -translate-y-1/2 flex-col gap-3">
+              {[
+                ['request', '♪'],
+                ['tip', 'R$'],
+                ['vote', '★'],
+              ].map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => {
+                    setActiveAction(id);
+                    if (id === 'request') setIsModalOpen(true);
+                  }}
+                  className={`flex h-12 w-12 items-center justify-center rounded-full text-sm font-black shadow-lg backdrop-blur ${
+                    activeAction === id
+                      ? 'bg-palco-gold text-palco-black'
+                      : 'bg-black/50 text-white'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {profile?.role === 'listener' && activeAction !== 'request' && (
+          <div className="mt-3">
+            <LiveActions
+              activeAction={activeAction}
+              setActiveAction={setActiveAction}
+              selectedArtist={selectedArtist}
+              wallet={wallet}
+              tipAmount={tipAmount}
+              setTipAmount={setTipAmount}
+              tipMessage={tipMessage}
+              setTipMessage={setTipMessage}
+              tipLoading={tipLoading}
+              onRequest={() => setIsModalOpen(true)}
+              onTip={handleTipSubmit}
+              onVote={handleVote}
+              votes={votes}
+              feedback={feedback}
             />
           </div>
-
-          <div className="pointer-events-auto hidden space-y-3 lg:block">
-            {profile?.role === 'listener' && (
-              <WalletTopUp
-                wallet={wallet}
-                creditAmount={creditAmount}
-                setCreditAmount={setCreditAmount}
-                creditError={creditError}
-                setCreditError={setCreditError}
-                addingFunds={addingFunds}
-                onAddFunds={handleAddFunds}
-              />
-            )}
-            {profile?.role === 'listener' && (
-              <LiveActions
-                activeAction={activeAction}
-                setActiveAction={setActiveAction}
-                selectedArtist={selectedArtist}
-                wallet={wallet}
-                tipAmount={tipAmount}
-                setTipAmount={setTipAmount}
-                tipMessage={tipMessage}
-                setTipMessage={setTipMessage}
-                tipLoading={tipLoading}
-                onRequest={() => setIsModalOpen(true)}
-                onTip={handleTipSubmit}
-                onVote={handleVote}
-                votes={votes}
-                feedback={feedback}
-              />
-            )}
-          </div>
-        </div>
-
-        {profile?.role === 'listener' && (
-          <div className="pointer-events-auto absolute right-3 top-1/2 flex -translate-y-1/2 flex-col gap-3 lg:hidden">
-            {[
-              ['request', '♪'],
-              ['tip', 'R$'],
-              ['vote', '★'],
-            ].map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => {
-                  setActiveAction(id);
-                  if (id === 'request') setIsModalOpen(true);
-                }}
-                className={`flex h-12 w-12 items-center justify-center rounded-full text-sm font-black shadow-lg backdrop-blur ${
-                  activeAction === id
-                    ? 'bg-palco-gold text-palco-black'
-                    : 'bg-black/50 text-white'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
         )}
-      </section>
-
-      {profile?.role === 'listener' && activeAction !== 'request' && (
-        <div className="mt-3 lg:hidden">
-          <LiveActions
-            activeAction={activeAction}
-            setActiveAction={setActiveAction}
-            selectedArtist={selectedArtist}
-            wallet={wallet}
-            tipAmount={tipAmount}
-            setTipAmount={setTipAmount}
-            tipMessage={tipMessage}
-            setTipMessage={setTipMessage}
-            tipLoading={tipLoading}
-            onRequest={() => setIsModalOpen(true)}
-            onTip={handleTipSubmit}
-            onVote={handleVote}
-            votes={votes}
-            feedback={feedback}
-          />
-        </div>
-      )}
+      </div>
 
       <RequestSongModal
         isOpen={isModalOpen}
@@ -641,6 +775,6 @@ export default function RoomPage() {
         currentBalance={wallet?.balance || 0}
         targetArtistName={selectedArtist?.name}
       />
-    </div>
+    </>
   );
 }

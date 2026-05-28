@@ -23,6 +23,8 @@ export default function LiveStreamPlayer({
   onStart,
   actionLabel = 'Ouvir ao vivo',
   className = 'aspect-video',
+  showStatus = true,
+  showInfo = true,
 }) {
   const videoRef = useRef(null);
 
@@ -53,10 +55,12 @@ export default function LiveStreamPlayer({
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(212,168,67,0.18),transparent_32%),linear-gradient(180deg,rgba(31,33,39,0.94),rgba(5,5,6,0.98))]" />
       )}
 
-      <div className="absolute left-4 top-4 z-10 flex items-center gap-2 rounded-full bg-palco-live px-3 py-1 text-xs font-bold uppercase tracking-widest text-white shadow-lg">
-        <span className="h-2 w-2 rounded-full bg-white" />
-        {status === 'live' || status === 'ready' ? 'Ao vivo' : STATUS_LABELS[status] || 'Ao vivo'}
-      </div>
+      {showStatus && (
+        <div className="absolute left-4 top-4 z-10 flex items-center gap-2 rounded-full bg-palco-live px-3 py-1 text-xs font-bold uppercase tracking-widest text-white shadow-lg">
+          <span className="h-2 w-2 rounded-full bg-white" />
+          {status === 'live' || status === 'ready' ? 'Ao vivo' : STATUS_LABELS[status] || 'Ao vivo'}
+        </div>
+      )}
 
       {!hasMedia && (
         <div className="relative z-10 flex max-w-sm flex-col items-center px-6 text-center">
@@ -82,7 +86,7 @@ export default function LiveStreamPlayer({
         </div>
       )}
 
-      {hasMedia && (
+      {hasMedia && showInfo && (
         <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-palco-black/90 to-transparent p-4">
           <p className="font-display text-lg font-bold text-white drop-shadow-md">{title}</p>
           <p className="mt-1 text-sm text-palco-text-muted drop-shadow-md">

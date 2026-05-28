@@ -21,7 +21,10 @@ import RegisterPage from './pages/RegisterPage';
 import ArtistDashboardPage from './pages/ArtistDashboardPage';
 import TVModePage from './pages/TVModePage';
 import RoomPage from './pages/RoomPage';
+import RoomsPage from './pages/RoomsPage';
 import PublicInteractionPage from './pages/PublicInteractionPage';
+import ProfilePage from './pages/ProfilePage';
+import WalletReturnPage from './pages/WalletReturnPage';
 import OnboardingModal from './components/features/auth/OnboardingModal';
 
 export default function App() {
@@ -39,6 +42,14 @@ export default function App() {
             }
           />
           <Route
+            path="/rooms"
+            element={
+              <AppShell>
+                <RoomsPage />
+              </AppShell>
+            }
+          />
+          <Route
             path="/room/:roomId"
             element={
               <ProtectedRoute>
@@ -49,6 +60,26 @@ export default function App() {
             }
           />
           <Route path="/interact/:roomId" element={<PublicInteractionPage />} />
+          <Route
+            path="/wallet/return"
+            element={
+              <ProtectedRoute>
+                <AppShell>
+                  <WalletReturnPage />
+                </AppShell>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <AppShell>
+                  <ProfilePage />
+                </AppShell>
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/artist"
             element={

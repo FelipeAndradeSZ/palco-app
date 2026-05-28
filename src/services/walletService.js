@@ -35,3 +35,14 @@ export async function addFundsCheckout(amount, userId) {
     window.location.href = data.url; // Redireciona pro Stripe
   }
 }
+
+export async function confirmCheckoutSession(sessionId) {
+  const { data, error } = await supabase.functions.invoke('confirm-checkout', {
+    body: { sessionId },
+  });
+
+  if (error) throw error;
+  if (!data?.ok) throw new Error(data?.error || 'Nao foi possivel confirmar o pagamento.');
+
+  return data;
+}
