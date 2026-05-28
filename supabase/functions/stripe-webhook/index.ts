@@ -29,8 +29,8 @@ async function creditCheckoutSession(session: Stripe.Checkout.Session) {
   const supabase = getSupabaseAdmin()
   const { error } = await supabase.rpc('credit_wallet_topup', {
     checkout_session_id: session.id,
-    target_profile_id: userId,
     credit_amount: amount,
+    target_profile_id: userId,
   })
 
   if (error) {

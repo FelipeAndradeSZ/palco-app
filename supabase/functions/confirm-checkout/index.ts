@@ -61,8 +61,8 @@ serve(async (req) => {
 
     const { data, error } = await supabaseAdmin.rpc('credit_wallet_topup', {
       checkout_session_id: session.id,
-      target_profile_id: userId,
       credit_amount: amount,
+      target_profile_id: userId,
     })
 
     if (error) throw error
