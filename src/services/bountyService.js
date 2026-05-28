@@ -42,9 +42,9 @@ function buildRequestAlert(songTitle, bountyValue, dedication) {
   return `Pediu "${songTitle.trim()}" por R$ ${amount}.${extra}`;
 }
 
-async function notifyRequest(roomId, requesterId, songTitle, bountyValue, dedication) {
+async function notifyRequest(roomId, requesterId, songTitle, bountyValue, dedication, targetArtistId = null) {
   const content = buildRequestAlert(songTitle, bountyValue, dedication);
-  return sendMessage(roomId, requesterId, content, 'request_alert');
+  return sendMessage(roomId, requesterId, content, 'request_alert', targetArtistId);
 }
 
 export async function createSongRequest({
@@ -75,7 +75,7 @@ export async function createSongRequest({
     .single();
 
   if (!enhanced.error) {
-    await notifyRequest(roomId, user.id, payload.song_title, payload.bounty_value, payload.dedication);
+    await notifyRequest(roomId, user.id, payload.song_title, payload.bounty_value, payload.dedication, targetArtistId);
     return enhanced;
   }
 
@@ -96,7 +96,7 @@ export async function createSongRequest({
     .single();
 
   if (!legacy.error) {
-    await notifyRequest(roomId, user.id, payload.song_title, payload.bounty_value, payload.dedication);
+    await notifyRequest(roomId, user.id, payload.song_title, payload.bounty_value, payload.dedication, targetArtistId);
   }
 
   return legacy;
@@ -124,7 +124,7 @@ export async function sendTip(roomId, amount, message, targetArtistId = null) {
   });
 
   if (!rpcResult.error) {
-    const messageResult = await sendMessage(roomId, user.id, content, 'tip_alert');
+    const messageResult = await sendMessage(roomId, user.id, content, 'tip_alert', targetArtistId);
     if (messageResult.error) {
       return {
         data: {

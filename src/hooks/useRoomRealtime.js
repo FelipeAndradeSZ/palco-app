@@ -57,7 +57,7 @@ export function useRoomRealtime(roomId, options = {}) {
 
     async function hydrate() {
       try {
-        const { data: recentMessages } = await getRecentMessages(roomId);
+        const { data: recentMessages } = await getRecentMessages(roomId, targetArtistId);
         if (isMounted && recentMessages) setMessages(recentMessages);
 
         const { data: requests } = await getActiveRequests(roomId, targetArtistId);
@@ -94,6 +94,7 @@ export function useRoomRealtime(roomId, options = {}) {
       onNewMessage: async (newMsg) => {
         console.log('[useRoomRealtime] onNewMessage event fired:', newMsg);
         if (!isMounted) return;
+        if (newMsg.artist_id !== targetArtistId) return;
         const enrichedMsg = await resolveMessageSender(newMsg);
 
         if (!isMounted) return;
@@ -168,7 +169,7 @@ export function useRoomRealtime(roomId, options = {}) {
 
   const sendChatMessage = useCallback(async (content) => {
     if (!userId || !roomId) return { error: { message: 'Nao autorizado' } };
-    const result = await sendMessage(roomId, userId, content, 'text');
+    const result = await sendMessage(roomId, userId, content, 'text', targetArtistId);
 
     if (!result.error && result.data) {
       const enrichedMsg = await resolveMessageSender(result.data);
@@ -176,7 +177,7 @@ export function useRoomRealtime(roomId, options = {}) {
     }
 
     return result;
-  }, [appendMessage, resolveMessageSender, roomId, userId]);
+  }, [appendMessage, resolveMessageSender, roomId, userId, targetArtistId]);
 
   const castVote = useCallback(async (category) => {
     if (!userId || !roomId || !targetArtistId) return { error: new Error('Não autorizado') };

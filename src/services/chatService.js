@@ -13,15 +13,20 @@ import { supabase } from '../lib/supabase';
  * @param {string} content 
  * @param {string} messageType ('text', 'tip_alert', 'request_alert', 'system')
  */
-export async function sendMessage(roomId, senderId, content, messageType = 'text') {
+export async function sendMessage(roomId, senderId, content, messageType = 'text', artistId = null) {
+  const payload = {
+    room_id: roomId,
+    sender_id: senderId,
+    content: content.trim(),
+    message_type: messageType,
+  };
+  if (artistId) {
+    payload.artist_id = artistId;
+  }
+
   const { data, error } = await supabase
     .from('chat_messages')
-    .insert({
-      room_id: roomId,
-      sender_id: senderId,
-      content: content.trim(),
-      message_type: messageType,
-    })
+    .insert(payload)
     .select()
     .single();
 
@@ -33,8 +38,8 @@ export async function sendMessage(roomId, senderId, content, messageType = 'text
  * quando o usuário acaba de entrar.
  * Traz as informações do remetente via JOIN.
  */
-export async function getRecentMessages(roomId, limit = 50) {
-  const { data, error } = await supabase
+export async function getRecentMessages(roomId, artistId = null, limit = 50) {
+  let query = supabase
     .from('chat_messages')
     .select(`
       *,
@@ -43,7 +48,15 @@ export async function getRecentMessages(roomId, limit = 50) {
         artist_details(quality_tier)
       )
     `)
-    .eq('room_id', roomId)
+    .eq('room_id', roomId);
+
+  if (artistId) {
+    query = query.eq('artist_id', artistId);
+  } else {
+    query = query.is('artist_id', null);
+  }
+
+  const { data, error } = await query
     .order('created_at', { ascending: false })
     .limit(limit);
 
