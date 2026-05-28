@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { updateRequestStatus } from '../../../services/bountyService';
 import Button from '../../ui/Button';
 
-export default function ArtistRequestQueue({ activeRequests }) {
+export default function ArtistRequestQueue({ activeRequests, onStatusChanged }) {
   const [processingId, setProcessingId] = useState(null);
 
   const pendingRequests = activeRequests.filter(r => r.status === 'pending');
@@ -16,12 +16,16 @@ export default function ArtistRequestQueue({ activeRequests }) {
     setProcessingId(id);
     try {
       await updateRequestStatus(id, newStatus);
+      if (onStatusChanged) {
+        onStatusChanged();
+      }
     } catch (err) {
       console.error('Erro ao atualizar pedido:', err);
     } finally {
       setProcessingId(null);
     }
   };
+
 
   const renderRequestItem = (req, isPending) => {
     const requesterName = req.requester?.name || 'Alguém';

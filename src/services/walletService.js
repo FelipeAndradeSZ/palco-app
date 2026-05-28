@@ -62,3 +62,69 @@ export async function confirmCheckoutSession(sessionId) {
 
   return data;
 }
+
+/**
+ * Solicita um saque de saldo do artista.
+ */
+export async function requestWithdrawal(amount, pixKey) {
+  const { data, error } = await supabase.rpc('request_withdrawal', {
+    p_amount: Number(amount),
+    p_pix_key: pixKey,
+  });
+
+  return { data, error };
+}
+
+/**
+ * Busca o histórico de solicitações de saques.
+ */
+export async function getWithdrawalRequests(profileId) {
+  const { data, error } = await supabase
+    .from('withdrawal_requests')
+    .select('*')
+    .eq('profile_id', profileId)
+    .order('created_at', { ascending: false });
+
+  return { data, error };
+}
+
+/**
+ * Busca o extrato de transações de um perfil (entrada/saída).
+ */
+export async function getTransactions(profileId) {
+  const { data, error } = await supabase
+    .from('transactions')
+    .select(`
+      *,
+      sender:profiles!transactions_sender_id_fkey(name, avatar_url),
+      receiver:profiles!transactions_receiver_id_fkey(name, avatar_url)
+    `)
+    .or(`sender_id.eq.${profileId},receiver_id.eq.${profileId}`)
+    .order('created_at', { ascending: false });
+
+  return { data, error };
+}
+
+/**
+ * Simula a aprovação de uma solicitação de saque (Testes/Admin).
+ */
+export async function simulateApproveWithdrawal(requestId) {
+  const { data, error } = await supabase.rpc('simulate_approve_withdrawal', {
+    p_request_id: requestId,
+  });
+
+  return { data, error };
+}
+
+/**
+ * Simula a recusa de uma solicitação de saque (Testes/Admin).
+ */
+export async function simulateRejectWithdrawal(requestId, reason) {
+  const { data, error } = await supabase.rpc('simulate_reject_withdrawal', {
+    p_request_id: requestId,
+    p_reason: reason,
+  });
+
+  return { data, error };
+}
+

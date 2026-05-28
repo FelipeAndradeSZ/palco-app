@@ -188,7 +188,36 @@ export async function getActiveRequests(roomId, targetArtistId = null) {
   return { data: legacy.data || [], error: legacy.error };
 }
 
-export async function updateRequestStatus(requestId, status) {
+export async function updateRequestStatus(requestId, status, artistId = null) {
+  if (status === 'accepted') {
+    let targetArtistId = artistId;
+    if (!targetArtistId) {
+      const { data: { user } } = await supabase.auth.getUser();
+      targetArtistId = user?.id;
+    }
+
+    if (!targetArtistId) {
+      return { error: new Error('Artista não identificado ou não autenticado.') };
+    }
+
+    const { error: rpcError } = await supabase.rpc('process_song_request', {
+      p_request_id: requestId,
+      p_artist_id: targetArtistId,
+    });
+
+    if (rpcError) return { data: null, error: rpcError };
+
+    // Buscar o pedido atualizado para retornar
+    const { data, error } = await supabase
+      .from('song_requests')
+      .select('*')
+      .eq('id', requestId)
+      .single();
+
+    return { data, error };
+  }
+
+  // Demais status (como cancelled ou completed) usam update direto na tabela
   const { data, error } = await supabase
     .from('song_requests')
     .update({ status })
@@ -198,3 +227,4 @@ export async function updateRequestStatus(requestId, status) {
 
   return { data, error };
 }
+
