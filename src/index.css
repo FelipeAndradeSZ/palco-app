@@ -1,0 +1,106 @@
+@import "tailwindcss";
+
+/* ============================================================
+   PALCO — Design System
+   Plataforma brasileira de música ao vivo interativa
+   ============================================================ */
+
+@theme {
+  /* Background tones */
+  --color-palco-black: #0A0A0B;
+  --color-palco-dark: #141416;
+  --color-palco-card: #1C1C1F;
+  --color-palco-border: #2A2A2E;
+
+  /* Brand gold */
+  --color-palco-gold: #D4A843;
+  --color-palco-gold-light: #E8C76A;
+  --color-palco-gold-dark: #B08A2E;
+
+  /* Text */
+  --color-palco-text: #F5F5F5;
+  --color-palco-text-muted: #9CA3AF;
+  --color-palco-text-subtle: #6B7280;
+
+  /* Status */
+  --color-palco-live: #EF4444;
+  --color-palco-success: #22C55E;
+  --color-palco-warning: #F59E0B;
+
+  /* Tipografia */
+  --font-display: 'Outfit', sans-serif;
+  --font-body: 'Inter', sans-serif;
+
+  /* Animações Customizadas */
+  --animate-bounce-in: bounce-in 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  --animate-shrink-width: shrink-width 5s linear forwards;
+  --animate-pulse-fast: pulse-fast 1s infinite;
+
+  @keyframes bounce-in {
+    0% { opacity: 0; transform: scale(0.8) translateY(-20px); }
+    100% { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
+  @keyframes shrink-width {
+    0% { width: 100%; }
+    100% { width: 0%; }
+  }
+
+  @keyframes pulse-fast {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.1); }
+  }
+}
+
+/* Utilitário global para o pontinho de AO VIVO */
+@utility pulse-animation {
+  animation: var(--animate-pulse-fast);
+}
+
+/* ---- Global base styles ---- */
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-palco-black);
+  color: var(--color-palco-text);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ---- Selection ---- */
+
+::selection {
+  background-color: var(--color-palco-gold);
+  color: var(--color-palco-black);
+}
+
+/* ---- Custom scrollbar (Webkit + Firefox) ---- */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-palco-black);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-palco-border);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-palco-text-subtle);
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-palco-border) var(--color-palco-black);
+}
