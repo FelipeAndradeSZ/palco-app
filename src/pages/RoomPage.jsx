@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useRoomRealtime } from '../hooks/useRoomRealtime';
 import { useRoomMediaStream } from '../hooks/useRoomMediaStream';
@@ -86,7 +86,12 @@ function LiveChat({ messages, isConnected, onSendMessage }) {
   const [inputText, setInputText] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState(null);
-  const visibleMessages = messages.slice(-8);
+  const visibleMessages = messages.slice(-15);
+  const messagesEndRef = useRef(null);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -118,13 +123,36 @@ function LiveChat({ messages, isConnected, onSendMessage }) {
             Seja o primeiro a comentar.
           </div>
         ) : (
-          visibleMessages.map((message) => (
-            <div key={message.id} className="w-fit max-w-full rounded-2xl bg-black/45 px-4 py-2 text-sm text-white shadow-lg">
-              <span className="mr-2 font-black text-palco-gold">{message.sender?.name || 'Usuario'}</span>
-              <span className="break-words">{message.content}</span>
-            </div>
-          ))
+          visibleMessages.map((message) => {
+            const isTip = message.message_type === 'tip_alert';
+            const isRequest = message.message_type === 'request_alert';
+            const senderName = message.sender?.name || 'Ouvinte';
+
+            let wrapperClass = "w-fit max-w-full rounded-2xl px-4 py-2 text-sm shadow-lg backdrop-blur-sm mb-1 ";
+            
+            if (isTip) {
+              wrapperClass += "bg-gradient-to-r from-palco-gold/25 via-palco-gold/15 to-black/35 border border-palco-gold/50 text-white animate-pulse";
+            } else if (isRequest) {
+              wrapperClass += "bg-gradient-to-r from-palco-live/25 via-palco-live/15 to-black/35 border border-palco-live/50 text-white";
+            } else {
+              wrapperClass += "bg-black/55 text-white border border-white/5";
+            }
+
+            return (
+              <div key={message.id} className={wrapperClass}>
+                <span className={`mr-2 font-black ${isTip ? 'text-palco-gold-light' : isRequest ? 'text-red-400' : 'text-palco-gold'}`}>
+                  {isTip ? '👑 ' : isRequest ? '🎵 ' : ''}
+                  {senderName}
+                  {isTip && ' (Gorjeta)'}
+                  {isRequest && ' (Pedido)'}
+                  :
+                </span>
+                <span className="break-words font-semibold">{message.content}</span>
+              </div>
+            );
+          })
         )}
+        <div ref={messagesEndRef} />
       </div>
 
       <form onSubmit={handleSubmit} className="flex gap-2">

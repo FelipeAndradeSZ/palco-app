@@ -77,12 +77,15 @@ export function useRoomRealtime(roomId, options = {}) {
 
     hydrate();
 
+    console.log('[useRoomRealtime] Subscribing to room:', roomId, 'with artist:', targetArtistId);
     const channel = subscribeToRoom(roomId, {
       onConnectionStatus: (status) => {
+        console.log('[useRoomRealtime] Connection status changed:', status);
         if (!isMounted) return;
         setIsConnected(status === 'SUBSCRIBED');
       },
       onNewMessage: async (newMsg) => {
+        console.log('[useRoomRealtime] onNewMessage event fired:', newMsg);
         if (!isMounted) return;
         const enrichedMsg = await resolveMessageSender(newMsg);
 
@@ -94,6 +97,7 @@ export function useRoomRealtime(roomId, options = {}) {
         }
       },
       onSongRequestUpdate: async ({ eventType, newRecord, oldRecord }) => {
+        console.log('[useRoomRealtime] onSongRequestUpdate event fired:', eventType, newRecord);
         if (!isMounted) return;
 
         if (eventType === 'INSERT') {
@@ -124,9 +128,11 @@ export function useRoomRealtime(roomId, options = {}) {
         }
       },
       onRoomUpdate: (updatedRoom) => {
+        console.log('[useRoomRealtime] onRoomUpdate event fired:', updatedRoom);
         if (isMounted && onRoomUpdate) onRoomUpdate(updatedRoom);
       },
       onVoteCast: (newVote) => {
+        console.log('[useRoomRealtime] onVoteCast event fired:', newVote);
         if (!isMounted) return;
         if (targetArtistId && newVote.artist_id !== targetArtistId) return;
 
@@ -136,6 +142,7 @@ export function useRoomRealtime(roomId, options = {}) {
         }));
       },
       onLikeTap: (payload) => {
+        console.log('[useRoomRealtime] onLikeTap event fired:', payload);
         if (isMounted && options.onLikeReceived) {
           options.onLikeReceived(payload);
         }
@@ -145,6 +152,7 @@ export function useRoomRealtime(roomId, options = {}) {
     channelRef.current = channel;
 
     return () => {
+      console.log('[useRoomRealtime] Cleaning up subscription for room:', roomId);
       isMounted = false;
       unsubscribeFromRoom(channelRef.current);
       channelRef.current = null;
@@ -180,8 +188,8 @@ export function useRoomRealtime(roomId, options = {}) {
   }, [roomId, targetArtistId, userId]);
 
   const sendLike = useCallback(async (x = 50, y = 50) => {
-    if (!channelRef.current) return;
-    await channelRef.current.send({
+    if (!channelRef.current?.broadcastChannel) return;
+    await channelRef.current.broadcastChannel.send({
       type: 'broadcast',
       event: 'like_tap',
       payload: { x, y, senderName: user?.name || 'Ouvinte' },

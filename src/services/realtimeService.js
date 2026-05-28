@@ -12,9 +12,14 @@ export function subscribeToRoom(roomId, {
   onVoteCast,
   onLikeTap,
 } = {}) {
-  const channel = supabase.channel(`room:${roomId}`);
+  // Use a unique channel for database changes to avoid duplicate/overlapping unsubscribe conflicts
+  const dbChannelId = crypto.randomUUID();
+  const dbChannel = supabase.channel(`room-db:${roomId}:${dbChannelId}`);
+  
+  // Use a shared channel name for broadcasts (likes) so that all clients receive it
+  const broadcastChannel = supabase.channel(`room-bc:${roomId}`);
 
-  channel.on(
+  dbChannel.on(
     'postgres_changes',
     {
       event: 'INSERT',
@@ -27,7 +32,7 @@ export function subscribeToRoom(roomId, {
     }
   );
 
-  channel.on(
+  dbChannel.on(
     'postgres_changes',
     {
       event: 'INSERT',
@@ -40,8 +45,7 @@ export function subscribeToRoom(roomId, {
     }
   );
 
-
-  channel.on(
+  dbChannel.on(
     'postgres_changes',
     {
       event: '*',
@@ -60,7 +64,7 @@ export function subscribeToRoom(roomId, {
     }
   );
 
-  channel.on(
+  dbChannel.on(
     'postgres_changes',
     {
       event: 'UPDATE',
@@ -73,7 +77,7 @@ export function subscribeToRoom(roomId, {
     }
   );
 
-  channel.on(
+  broadcastChannel.on(
     'broadcast',
     { event: 'like_tap' },
     ({ payload }) => {
@@ -81,23 +85,34 @@ export function subscribeToRoom(roomId, {
     }
   );
 
-  channel.subscribe((status) => {
+  // Subscribe to both channels
+  dbChannel.subscribe((status) => {
     if (onConnectionStatus) onConnectionStatus(status);
 
     if (status === 'SUBSCRIBED') {
-      console.log(`[PALCO Realtime] Conectado a sala ${roomId}`);
-    } else if (status === 'CLOSED') {
-      console.log(`[PALCO Realtime] Desconectado da sala ${roomId}`);
+      console.log(`[PALCO Realtime] Banco de dados conectado a sala ${roomId}`);
     } else if (status === 'CHANNEL_ERROR') {
-      console.error(`[PALCO Realtime] Erro de conexao na sala ${roomId}`);
+      console.error(`[PALCO Realtime] Erro de conexao DB na sala ${roomId}`);
     }
   });
 
-  return channel;
+  broadcastChannel.subscribe((status) => {
+    if (status === 'SUBSCRIBED') {
+      console.log(`[PALCO Realtime] Canal de likes conectado a sala ${roomId}`);
+    }
+  });
+
+  return { dbChannel, broadcastChannel };
 }
 
-export function unsubscribeFromRoom(channel) {
-  if (channel) {
-    supabase.removeChannel(channel);
+export function unsubscribeFromRoom(channels) {
+  if (!channels) return;
+  
+  if (channels.dbChannel) {
+    supabase.removeChannel(channels.dbChannel);
+  }
+  
+  if (channels.broadcastChannel) {
+    supabase.removeChannel(channels.broadcastChannel);
   }
 }
