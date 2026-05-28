@@ -1,15 +1,325 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useRoomRealtime } from '../hooks/useRoomRealtime';
+import { useRoomMediaStream } from '../hooks/useRoomMediaStream';
 import { getRoomById, joinRoom, leaveRoom } from '../services/roomService';
 import { getWallet, addFundsCheckout } from '../services/walletService';
-import { createSongRequest } from '../services/bountyService';
+import { createSongRequest, sendTip } from '../services/bountyService';
 import { useAuth } from '../hooks/useAuth';
-import ChatBox from '../components/features/chat/ChatBox';
 import Spinner from '../components/ui/Spinner';
 import Badge from '../components/ui/Badge';
 import RequestSongModal from '../components/features/bounty/RequestSongModal';
-import { getActiveArtists, getArtistInteractionUrl, getPrimaryArtist } from '../lib/roomArtists';
+import LiveStreamPlayer from '../components/features/video/LiveStreamPlayer';
+import { getActiveArtists } from '../lib/roomArtists';
+import { BOUNTY_PRESETS } from '../lib/constants';
+import { sanitizeText, validateBountyValue, validateChatMessage } from '../lib/validators';
+
+const VOTE_OPTIONS = [
+  ['voice', 'Melhor voz'],
+  ['repertoire', 'Melhor repertório'],
+  ['presence', 'Presença de palco'],
+];
+
+function ArtistAvatar({ artist, size = 'md' }) {
+  const sizeClass = size === 'lg' ? 'h-20 w-20 text-3xl' : 'h-12 w-12 text-lg';
+
+  return (
+    <div className={`${sizeClass} flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-palco-gold/20 font-black text-palco-gold`}>
+      {artist?.avatar_url ? (
+        <img src={artist.avatar_url} alt={artist.name} className="h-full w-full object-cover" />
+      ) : (
+        artist?.name?.charAt(0)?.toUpperCase() || 'P'
+      )}
+    </div>
+  );
+}
+
+function ArtistSelectionScreen({ room, artists, onSelect }) {
+  return (
+    <div className="mx-auto min-h-[calc(100vh-4rem)] max-w-5xl px-4 py-6 sm:px-6">
+      <header className="mb-6">
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          <Badge variant="gold">{room.genre}</Badge>
+          <Badge variant={artists.length > 0 ? 'live' : 'default'} pulse={artists.length > 0}>
+            {artists.length} ao vivo
+          </Badge>
+        </div>
+        <h1 className="font-display text-3xl font-black text-palco-text sm:text-4xl">{room.name}</h1>
+        <p className="mt-2 max-w-2xl text-palco-text-muted">
+          Escolha um cantor para abrir a live com áudio, vídeo, chat, pedido de música, gorjeta e votação.
+        </p>
+      </header>
+
+      {artists.length > 0 ? (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {artists.map((artist) => (
+            <button
+              key={artist.id}
+              type="button"
+              onClick={() => onSelect(artist.id)}
+              className="group flex min-w-0 items-center gap-4 rounded-2xl border border-palco-border bg-palco-card p-4 text-left transition hover:-translate-y-0.5 hover:border-palco-gold/60 hover:bg-palco-gold/10"
+            >
+              <ArtistAvatar artist={artist} size="lg" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-display text-xl font-bold text-palco-text">{artist.name}</span>
+                <span className="mt-1 block truncate text-sm text-palco-text-subtle">
+                  {artist.current_song || artist.main_genre || 'Tocando agora'}
+                </span>
+                <span className="mt-3 inline-flex rounded-full bg-palco-gold px-4 py-2 text-xs font-black text-palco-black transition group-hover:bg-palco-gold-light">
+                  Entrar na live
+                </span>
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-dashed border-palco-border bg-palco-card p-8 text-center text-palco-text-muted">
+          Nenhum artista está ao vivo nessa sala agora.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LiveChatOverlay({ messages, isConnected, onSendMessage }) {
+  const [inputText, setInputText] = useState('');
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState(null);
+
+  const visibleMessages = messages.slice(-7);
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    setError(null);
+
+    const validation = validateChatMessage(inputText);
+    if (!validation.valid) {
+      setError(validation.error);
+      return;
+    }
+
+    setSending(true);
+    try {
+      const result = await onSendMessage(validation.sanitized);
+      if (result?.error) throw new Error(result.error.message);
+      setInputText('');
+    } catch (err) {
+      setError(err.message || 'Não foi possível enviar.');
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="pointer-events-auto flex min-h-0 flex-col gap-3">
+      <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+        {visibleMessages.length === 0 ? (
+          <div className="rounded-2xl bg-black/35 px-4 py-3 text-sm text-palco-text-muted backdrop-blur">
+            Seja o primeiro a comentar.
+          </div>
+        ) : (
+          visibleMessages.map((message) => (
+            <div key={message.id} className="w-fit max-w-[min(440px,100%)] rounded-2xl bg-black/45 px-4 py-2 text-sm text-white shadow-lg backdrop-blur">
+              <span className="mr-2 font-black text-palco-gold">{message.sender?.name || 'Usuário'}</span>
+              <span className="break-words">{message.content}</span>
+            </div>
+          ))
+        )}
+      </div>
+
+      <form onSubmit={handleSubmit} className="flex gap-2">
+        <input
+          value={inputText}
+          onChange={(event) => setInputText(event.target.value)}
+          placeholder={isConnected ? 'Comente na live...' : 'Conectando chat...'}
+          disabled={!isConnected || sending}
+          className="min-w-0 flex-1 rounded-full border border-white/15 bg-black/55 px-4 py-3 text-sm text-white outline-none backdrop-blur placeholder:text-palco-text-subtle focus:border-palco-gold disabled:opacity-60"
+          maxLength={500}
+        />
+        <button
+          type="submit"
+          disabled={!isConnected || sending || !inputText.trim()}
+          className="rounded-full bg-palco-gold px-5 py-3 text-sm font-black text-palco-black transition hover:bg-palco-gold-light disabled:opacity-60"
+        >
+          Enviar
+        </button>
+      </form>
+      {error && <p className="px-2 text-xs text-palco-live">{error}</p>}
+    </div>
+  );
+}
+
+function WalletTopUp({ wallet, creditAmount, setCreditAmount, creditError, setCreditError, addingFunds, onAddFunds }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/45 p-4 backdrop-blur">
+      <p className="text-xs font-black uppercase tracking-[0.18em] text-palco-gold">Carteira</p>
+      <div className="mt-3 flex items-center justify-between gap-3">
+        <span className="font-display text-xl font-bold text-white">
+          R$ {wallet?.balance?.toFixed(2) || '0.00'}
+        </span>
+        <label className="flex items-center gap-2 text-sm text-palco-text-muted">
+          R$
+          <input
+            type="number"
+            min="5"
+            step="1"
+            value={creditAmount}
+            onChange={(event) => {
+              setCreditAmount(event.target.value);
+              setCreditError(null);
+            }}
+            className="w-24 rounded-xl border border-white/15 bg-black/45 px-3 py-2 text-sm font-bold text-white outline-none focus:border-palco-gold"
+          />
+        </label>
+      </div>
+      <button
+        onClick={onAddFunds}
+        disabled={addingFunds}
+        className="mt-3 w-full rounded-xl bg-palco-gold px-4 py-2 text-sm font-black text-palco-black transition hover:bg-palco-gold-light disabled:opacity-50"
+      >
+        {addingFunds ? 'Processando...' : 'Adicionar créditos'}
+      </button>
+      {creditError && <p className="mt-2 text-xs text-palco-live">{creditError}</p>}
+    </div>
+  );
+}
+
+function LiveActions({
+  activeAction,
+  setActiveAction,
+  selectedArtist,
+  wallet,
+  tipAmount,
+  setTipAmount,
+  tipMessage,
+  setTipMessage,
+  tipLoading,
+  onRequest,
+  onTip,
+  onVote,
+  votes,
+  feedback,
+}) {
+  const actions = [
+    ['request', 'Pedir'],
+    ['tip', 'Gorjeta'],
+    ['vote', 'Votar'],
+  ];
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/55 p-4 backdrop-blur">
+      <div className="mb-4 grid grid-cols-3 gap-2">
+        {actions.map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setActiveAction(id)}
+            className={`rounded-xl px-3 py-2 text-xs font-black transition ${
+              activeAction === id
+                ? 'bg-palco-gold text-palco-black'
+                : 'bg-white/[0.06] text-palco-text-muted hover:text-white'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {feedback && (
+        <div className={`mb-4 rounded-xl border px-3 py-2 text-sm ${
+          feedback.type === 'success'
+            ? 'border-palco-success/30 bg-palco-success/10 text-palco-success'
+            : 'border-palco-live/30 bg-palco-live/10 text-palco-live'
+        }`}
+        >
+          {feedback.message}
+        </div>
+      )}
+
+      {activeAction === 'request' && (
+        <div>
+          <p className="text-sm text-palco-text-muted">
+            Seu pedido entra direto na fila de {selectedArtist.name}.
+          </p>
+          <button
+            type="button"
+            onClick={onRequest}
+            className="mt-4 w-full rounded-xl bg-palco-gold px-4 py-3 text-sm font-black text-palco-black transition hover:bg-palco-gold-light"
+          >
+            Pedir música
+          </button>
+        </div>
+      )}
+
+      {activeAction === 'tip' && (
+        <form onSubmit={onTip} className="space-y-3">
+          <div className="grid grid-cols-4 gap-2">
+            {BOUNTY_PRESETS.map((preset) => (
+              <button
+                key={preset.value}
+                type="button"
+                onClick={() => setTipAmount(preset.value)}
+                className={`rounded-xl border px-2 py-2 text-xs font-black transition ${
+                  Number(tipAmount) === preset.value
+                    ? 'border-palco-gold bg-palco-gold text-palco-black'
+                    : 'border-white/10 bg-white/[0.05] text-palco-text-muted'
+                }`}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+          <label className="flex items-center gap-2 text-sm text-palco-text-muted">
+            R$
+            <input
+              type="number"
+              min="5"
+              step="0.01"
+              value={tipAmount}
+              onChange={(event) => setTipAmount(event.target.value)}
+              className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/35 px-3 py-2 text-white outline-none focus:border-palco-gold"
+            />
+          </label>
+          <input
+            value={tipMessage}
+            onChange={(event) => setTipMessage(event.target.value)}
+            placeholder="Mensagem da gorjeta"
+            maxLength={160}
+            className="w-full rounded-xl border border-white/10 bg-black/35 px-3 py-2 text-sm text-white outline-none placeholder:text-palco-text-subtle focus:border-palco-gold"
+          />
+          <p className="text-xs text-palco-text-subtle">
+            Saldo: R$ {wallet?.balance?.toFixed(2) || '0.00'}
+          </p>
+          <button
+            type="submit"
+            disabled={tipLoading}
+            className="w-full rounded-xl bg-palco-gold px-4 py-3 text-sm font-black text-palco-black transition hover:bg-palco-gold-light disabled:opacity-60"
+          >
+            {tipLoading ? 'Enviando...' : 'Enviar gorjeta'}
+          </button>
+        </form>
+      )}
+
+      {activeAction === 'vote' && (
+        <div className="space-y-2">
+          {VOTE_OPTIONS.map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => onVote(key, label)}
+              className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3 text-left transition hover:border-palco-gold/50"
+            >
+              <span className="font-bold text-white">{label}</span>
+              <span className="rounded-full bg-palco-gold/15 px-3 py-1 text-xs font-black text-palco-gold">
+                {votes[key]} votos
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function RoomPage() {
   const { roomId } = useParams();
@@ -23,6 +333,13 @@ export default function RoomPage() {
   const [creditAmount, setCreditAmount] = useState(50);
   const [creditError, setCreditError] = useState(null);
   const [selectedArtistId, setSelectedArtistId] = useState(null);
+  const [listenEnabled, setListenEnabled] = useState(false);
+  const [activeAction, setActiveAction] = useState('request');
+  const [tipAmount, setTipAmount] = useState(10);
+  const [tipMessage, setTipMessage] = useState('');
+  const [tipLoading, setTipLoading] = useState(false);
+  const [feedback, setFeedback] = useState(null);
+  const [votes, setVotes] = useState({ voice: 0, repertoire: 0, presence: 0 });
 
   const handleRoomUpdate = useCallback(async () => {
     const { data: fullRoom } = await getRoomById(roomId);
@@ -30,14 +347,20 @@ export default function RoomPage() {
   }, [roomId]);
 
   const activeArtists = getActiveArtists(room);
-  const selectedArtist = getPrimaryArtist(room, selectedArtistId);
-  const interactionUrl = selectedArtist
-    ? getArtistInteractionUrl(roomId, selectedArtist.id)
-    : getArtistInteractionUrl(roomId);
+  const selectedArtist = selectedArtistId
+    ? activeArtists.find((artist) => artist.id === selectedArtistId) || null
+    : null;
 
   const { messages, isConnected, sendChatMessage } = useRoomRealtime(roomId, {
     onRoomUpdate: handleRoomUpdate,
     targetArtistId: selectedArtist?.id || null,
+  });
+
+  const listenerMedia = useRoomMediaStream({
+    roomId,
+    artistId: selectedArtist?.id,
+    role: 'listener',
+    enabled: listenEnabled && Boolean(selectedArtist?.id),
   });
 
   useEffect(() => {
@@ -72,6 +395,18 @@ export default function RoomPage() {
     };
   }, [roomId, profile, navigate]);
 
+  const handleSelectArtist = (artistId) => {
+    setSelectedArtistId(artistId);
+    setListenEnabled(true);
+    setFeedback(null);
+  };
+
+  const handleBackToArtists = () => {
+    setSelectedArtistId(null);
+    setListenEnabled(false);
+    setFeedback(null);
+  };
+
   const handleAddFunds = async () => {
     const amount = Number(creditAmount);
     if (!Number.isFinite(amount) || amount < 5) {
@@ -101,7 +436,52 @@ export default function RoomPage() {
 
     const { data } = await getWallet(profile.id);
     if (data) setWallet(data);
+    setFeedback({ type: 'success', message: 'Pedido enviado para a fila do artista.' });
   };
+
+  async function handleTipSubmit(event) {
+    event.preventDefault();
+    setFeedback(null);
+
+    const amountValidation = validateBountyValue(tipAmount);
+    if (!amountValidation.valid) {
+      setFeedback({ type: 'error', message: amountValidation.error });
+      return;
+    }
+
+    const amount = Number(tipAmount);
+    if ((wallet?.balance || 0) < amount) {
+      setFeedback({ type: 'error', message: 'Saldo insuficiente para essa gorjeta.' });
+      return;
+    }
+
+    setTipLoading(true);
+    try {
+      const result = await sendTip(roomId, amount, sanitizeText(tipMessage), selectedArtist.id);
+      if (result?.error) throw new Error(result.error.message);
+
+      const { data } = await getWallet(profile.id);
+      if (data) setWallet(data);
+
+      setTipMessage('');
+      setFeedback({
+        type: 'success',
+        message: result?.data?.fallback
+          ? 'Gorjeta apareceu no chat. Aplique a migration para descontar créditos automaticamente.'
+          : 'Gorjeta enviada para o artista.',
+      });
+    } catch (err) {
+      setFeedback({ type: 'error', message: err.message || 'Não foi possível enviar a gorjeta.' });
+    } finally {
+      setTipLoading(false);
+    }
+  }
+
+  async function handleVote(key, label) {
+    setVotes((prev) => ({ ...prev, [key]: prev[key] + 1 }));
+    setFeedback({ type: 'success', message: `Voto registrado: ${label}.` });
+    await sendChatMessage(`Votou em "${label}" para ${selectedArtist.name}.`);
+  }
 
   if (loading || !room) {
     return (
@@ -111,148 +491,148 @@ export default function RoomPage() {
     );
   }
 
-  return (
-    <div className="mx-auto flex h-[calc(100vh-4rem)] max-w-6xl flex-col px-4 py-6 sm:px-6">
-      <div className="mb-6 flex shrink-0 flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-        <div>
-          <div className="mb-1 flex items-center gap-3">
-            <h1 className="font-display text-2xl font-bold text-palco-text">{room.name}</h1>
-            {activeArtists.length > 0 && (
-              <Badge variant="live" pulse>
-                {activeArtists.length} ao vivo
-              </Badge>
-            )}
-          </div>
-          <p className="text-palco-text-muted">
-            {selectedArtist ? `Interagindo com ${selectedArtist.name}` : 'Escolha um artista quando a sala estiver ao vivo'}
-          </p>
-        </div>
+  if (!selectedArtist) {
+    return (
+      <ArtistSelectionScreen
+        room={room}
+        artists={activeArtists}
+        onSelect={handleSelectArtist}
+      />
+    );
+  }
 
-        <div className="flex flex-wrap items-center gap-3">
-          <Badge variant="gold">{room.genre}</Badge>
-          <div className="hidden items-center gap-1.5 text-sm text-palco-text-subtle sm:flex">
+  return (
+    <div className="mx-auto min-h-[calc(100vh-4rem)] max-w-7xl px-3 py-4 sm:px-5">
+      <section className="relative min-h-[calc(100vh-6rem)] overflow-hidden rounded-3xl border border-palco-border bg-palco-black">
+        <LiveStreamPlayer
+          stream={listenerMedia.remoteStream}
+          status={listenEnabled ? listenerMedia.status : 'idle'}
+          error={listenerMedia.error}
+          title={selectedArtist.name}
+          subtitle={selectedArtist.current_song || selectedArtist.main_genre || 'Tocando ao vivo'}
+          initial={selectedArtist.name.charAt(0).toUpperCase()}
+          canStart
+          isStarted={listenEnabled}
+          onStart={() => setListenEnabled(true)}
+          actionLabel="Ouvir ao vivo"
+          className="absolute inset-0 h-full rounded-none border-0"
+        />
+
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-black/10 to-black/75" />
+
+        <div className="pointer-events-auto absolute left-4 right-4 top-4 flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={handleBackToArtists}
+            className="rounded-full border border-white/15 bg-black/45 px-4 py-2 text-sm font-bold text-white backdrop-blur transition hover:border-palco-gold/60"
+          >
+            Trocar cantor
+          </button>
+          <div className="flex items-center gap-2 rounded-full bg-black/45 px-3 py-2 text-sm text-white backdrop-blur">
             <span className="h-2 w-2 rounded-full bg-palco-success" />
             {room.listener_count || 0} ouvintes
           </div>
-
-          {profile?.role === 'listener' && (
-            <div className="rounded-lg border border-palco-border bg-palco-dark/50 px-3 py-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-bold text-palco-gold">
-                  Saldo R$ {wallet?.balance?.toFixed(2) || '0.00'}
-                </span>
-                <label className="flex items-center gap-1 text-xs text-palco-text-muted">
-                  R$
-                  <input
-                    type="number"
-                    min="5"
-                    step="1"
-                    value={creditAmount}
-                    onChange={(event) => {
-                      setCreditAmount(event.target.value);
-                      setCreditError(null);
-                    }}
-                    className="w-20 rounded border border-palco-border bg-palco-black px-2 py-1 text-xs font-bold text-palco-text outline-none focus:border-palco-gold"
-                  />
-                </label>
-                <button
-                  onClick={handleAddFunds}
-                  disabled={addingFunds}
-                  className="rounded border border-palco-border px-2 py-1 text-xs font-bold text-palco-text transition hover:text-palco-gold disabled:opacity-50"
-                  title="Comprar saldo via Stripe"
-                >
-                  {addingFunds ? 'Processando...' : 'Adicionar'}
-                </button>
-              </div>
-              {creditError && (
-                <p className="mt-1 text-xs text-palco-live">{creditError}</p>
-              )}
-            </div>
-          )}
         </div>
-      </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="relative flex flex-col gap-6 overflow-y-auto lg:col-span-2">
-          {profile?.role === 'listener' && selectedArtist && (
-            <div className="absolute left-4 top-4 z-10">
-              <button
-                onClick={() => setIsModalOpen(true)}
-                className="flex items-center gap-2 rounded-full bg-palco-gold px-6 py-3 font-display text-lg font-bold text-palco-black shadow-[0_0_20px_rgba(212,168,67,0.4)] transition hover:scale-105 hover:shadow-[0_0_30px_rgba(212,168,67,0.6)]"
-              >
-                Pedir música
-              </button>
-            </div>
-          )}
-
-          <section className="rounded-2xl border border-palco-border bg-palco-card p-4">
-            <div className="mb-3 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-              <div>
-                <h2 className="font-display font-bold text-palco-text">Artistas nesta sala</h2>
-                <p className="text-sm text-palco-text-subtle">
-                  O ouvinte escolhe o artista antes de pedir música, votar ou mandar gorjeta.
+        <div className="pointer-events-none absolute bottom-4 left-4 right-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-end">
+          <div className="min-w-0">
+            <div className="pointer-events-auto mb-4 flex items-center gap-3">
+              <ArtistAvatar artist={selectedArtist} />
+              <div className="min-w-0">
+                <p className="truncate font-display text-2xl font-black text-white">{selectedArtist.name}</p>
+                <p className="truncate text-sm text-palco-text-muted">
+                  {room.name} • {selectedArtist.current_song || selectedArtist.main_genre || 'Ao vivo'}
                 </p>
               </div>
-              <Link
-                to={interactionUrl}
-                className="rounded-xl border border-palco-gold/40 px-3 py-2 text-center text-xs font-bold text-palco-gold transition hover:bg-palco-gold/10"
-              >
-                Abrir interação pública
-              </Link>
+              <Badge variant="live" pulse>Ao vivo</Badge>
             </div>
+            <LiveChatOverlay
+              messages={messages}
+              isConnected={isConnected}
+              onSendMessage={sendChatMessage}
+            />
+          </div>
 
-            {activeArtists.length > 0 ? (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {activeArtists.map((artist) => (
-                  <button
-                    key={artist.id}
-                    type="button"
-                    onClick={() => setSelectedArtistId(artist.id)}
-                    className={`flex items-center gap-3 rounded-xl border p-3 text-left transition ${
-                      selectedArtist?.id === artist.id
-                        ? 'border-palco-gold bg-palco-gold/10'
-                        : 'border-palco-border bg-palco-dark/50 hover:border-palco-gold/40'
-                    }`}
-                  >
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-palco-gold/20 text-sm font-bold text-palco-gold">
-                      {artist.name.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate font-bold text-palco-text">{artist.name}</p>
-                      <p className="text-xs text-palco-text-subtle">{artist.main_genre || 'Tocando agora'}</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-xl border border-dashed border-palco-border p-6 text-center text-palco-text-subtle">
-                Nenhum artista ao vivo nesta sala agora.
-              </div>
+          <div className="pointer-events-auto hidden space-y-3 lg:block">
+            {profile?.role === 'listener' && (
+              <WalletTopUp
+                wallet={wallet}
+                creditAmount={creditAmount}
+                setCreditAmount={setCreditAmount}
+                creditError={creditError}
+                setCreditError={setCreditError}
+                addingFunds={addingFunds}
+                onAddFunds={handleAddFunds}
+              />
             )}
-          </section>
-
-          <div className="relative flex aspect-video flex-col items-center justify-center overflow-hidden rounded-2xl border border-palco-border bg-palco-card shadow-inner">
-            <div className="absolute inset-0 bg-gradient-to-t from-palco-black/80 via-transparent to-transparent" />
-            <div className="z-10 mb-4 flex h-24 w-24 items-center justify-center rounded-full border-4 border-palco-border bg-palco-dark">
-              <span className="text-4xl">{selectedArtist ? selectedArtist.name.charAt(0) : 'P'}</span>
-            </div>
-            <p className="z-10 font-display text-xl font-bold text-palco-text">
-              {selectedArtist?.name || 'O palco está vazio'}
-            </p>
-            <p className="z-10 mt-2 text-sm text-palco-text-muted">
-              {selectedArtist ? 'Pedidos e votos estão direcionados para este artista.' : 'A música acontece aqui.'}
-            </p>
+            {profile?.role === 'listener' && (
+              <LiveActions
+                activeAction={activeAction}
+                setActiveAction={setActiveAction}
+                selectedArtist={selectedArtist}
+                wallet={wallet}
+                tipAmount={tipAmount}
+                setTipAmount={setTipAmount}
+                tipMessage={tipMessage}
+                setTipMessage={setTipMessage}
+                tipLoading={tipLoading}
+                onRequest={() => setIsModalOpen(true)}
+                onTip={handleTipSubmit}
+                onVote={handleVote}
+                votes={votes}
+                feedback={feedback}
+              />
+            )}
           </div>
         </div>
 
-        <div className="h-[400px] min-h-0 lg:h-auto">
-          <ChatBox
-            messages={messages}
-            isConnected={isConnected}
-            onSendMessage={sendChatMessage}
+        {profile?.role === 'listener' && (
+          <div className="pointer-events-auto absolute right-3 top-1/2 flex -translate-y-1/2 flex-col gap-3 lg:hidden">
+            {[
+              ['request', '♪'],
+              ['tip', 'R$'],
+              ['vote', '★'],
+            ].map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => {
+                  setActiveAction(id);
+                  if (id === 'request') setIsModalOpen(true);
+                }}
+                className={`flex h-12 w-12 items-center justify-center rounded-full text-sm font-black shadow-lg backdrop-blur ${
+                  activeAction === id
+                    ? 'bg-palco-gold text-palco-black'
+                    : 'bg-black/50 text-white'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {profile?.role === 'listener' && activeAction !== 'request' && (
+        <div className="mt-3 lg:hidden">
+          <LiveActions
+            activeAction={activeAction}
+            setActiveAction={setActiveAction}
+            selectedArtist={selectedArtist}
+            wallet={wallet}
+            tipAmount={tipAmount}
+            setTipAmount={setTipAmount}
+            tipMessage={tipMessage}
+            setTipMessage={setTipMessage}
+            tipLoading={tipLoading}
+            onRequest={() => setIsModalOpen(true)}
+            onTip={handleTipSubmit}
+            onVote={handleVote}
+            votes={votes}
+            feedback={feedback}
           />
         </div>
-      </div>
+      )}
 
       <RequestSongModal
         isOpen={isModalOpen}

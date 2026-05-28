@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useRooms } from '../hooks/useRooms';
 import { useRoomRealtime } from '../hooks/useRoomRealtime';
+import { useRoomMediaStream } from '../hooks/useRoomMediaStream';
 import { updateRoomArtist } from '../services/roomService';
 import { updateProfile, upsertArtistDetails } from '../services/profileService';
 import Card from '../components/ui/Card';
@@ -203,6 +204,12 @@ export default function ArtistDashboardPage() {
   const { activeRequests, messages, isConnected, sendChatMessage } = useRoomRealtime(activeRoomId, {
     targetArtistId: profile?.id || null,
   });
+  const mediaStream = useRoomMediaStream({
+    roomId: activeRoomId,
+    artistId: profile?.id,
+    role: 'artist',
+    enabled: Boolean(activeRoomId && profile?.id),
+  });
   const artistDetails = profile?.artist_details?.[0] || profile?.artist_details || {};
   const tierLabel = QUALITY_TIER_LABELS[artistDetails.quality_tier] || 'Bronze';
 
@@ -310,7 +317,13 @@ export default function ArtistDashboardPage() {
               </div>
             </div>
 
-            <LocalCamera isActive />
+            <LocalCamera
+              isActive
+              stream={mediaStream.localStream}
+              status={mediaStream.status}
+              error={mediaStream.error}
+              artistName={profile?.name}
+            />
             <ArtistRequestQueue activeRequests={activeRequests} />
           </div>
 

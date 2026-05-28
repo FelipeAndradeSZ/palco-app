@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { sendMessage } from './chatService';
 
 function shouldFallbackToLegacy(error) {
   if (!error) return false;
@@ -9,6 +10,17 @@ function shouldFallbackToLegacy(error) {
     message.includes('guest_name') ||
     message.includes('schema cache') ||
     message.includes('could not find')
+  );
+}
+
+function shouldFallbackTipRpc(error) {
+  if (!error) return false;
+  const message = `${error.message || ''} ${error.details || ''}`.toLowerCase();
+  return (
+    message.includes('send_artist_tip') ||
+    message.includes('schema cache') ||
+    message.includes('could not find') ||
+    message.includes('function')
   );
 }
 
@@ -68,7 +80,47 @@ export async function createSongRequest({
 }
 
 export async function sendTip(roomId, amount, message, targetArtistId = null) {
-  console.log('Enviando intenção de gorjeta:', { roomId, amount, message, targetArtistId });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: { message: 'Usuário não autenticado' } };
+
+  const tipAmount = Number(amount);
+  if (!Number.isFinite(tipAmount) || tipAmount < 5) {
+    return { error: { message: 'Valor mínimo da gorjeta é R$ 5,00.' } };
+  }
+
+  const cleanMessage = message?.trim();
+  const content = cleanMessage
+    ? `Enviou R$ ${tipAmount.toFixed(2)} de gorjeta: ${cleanMessage}`
+    : `Enviou R$ ${tipAmount.toFixed(2)} de gorjeta.`;
+
+  const rpcResult = await supabase.rpc('send_artist_tip', {
+    target_room_id: roomId,
+    target_artist_id: targetArtistId,
+    tip_amount: tipAmount,
+    tip_message: cleanMessage || null,
+  });
+
+  if (!rpcResult.error) {
+    await sendMessage(roomId, user.id, content, 'tip_alert');
+    return rpcResult;
+  }
+
+  if (!shouldFallbackTipRpc(rpcResult.error)) {
+    return rpcResult;
+  }
+
+  const messageResult = await sendMessage(roomId, user.id, content, 'tip_alert');
+  if (messageResult.error) return messageResult;
+
+  return {
+    data: {
+      fallback: true,
+      amount: tipAmount,
+      room_id: roomId,
+      target_artist_id: targetArtistId,
+    },
+    error: null,
+  };
 }
 
 export async function getActiveRequests(roomId, targetArtistId = null) {
