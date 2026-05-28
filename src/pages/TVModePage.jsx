@@ -7,16 +7,18 @@
  * transmissão ao vivo (WebRTC), fila de pedidos em tempo real e QR code.
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useRooms } from '../hooks/useRooms';
 import { useAuth } from '../hooks/useAuth';
 import { useRoomRealtime } from '../hooks/useRoomRealtime';
 import { useRoomMediaStream } from '../hooks/useRoomMediaStream';
+import { getVenueProfile, upsertVenueProfile } from '../services/venueService';
+import { createSubscriptionCheckout, getActiveSubscription } from '../services/subscriptionService';
 import Badge from '../components/ui/Badge';
 import LiveAlertOverlay from '../components/features/tv/LiveAlertOverlay';
 import LiveStreamPlayer from '../components/features/video/LiveStreamPlayer';
-import { VIBE_LEVEL_LABELS } from '../lib/constants';
+import { BRAZIL_REGIONS, MUSIC_GENRES, VIBE_LEVEL_LABELS } from '../lib/constants';
 import { getActiveArtists, getArtistInteractionUrl, getPrimaryArtist } from '../lib/roomArtists';
 
 const AUDIO_BARS = [
@@ -48,6 +50,17 @@ export default function TVModePage() {
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [selectedArtistId, setSelectedArtistId] = useState(null);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [venueConfig, setVenueConfig] = useState({
+    preferred_genre: '',
+    vibe_level: 'animado',
+    interaction_level: 'medium',
+    preferred_region: '',
+    audience_participation: true,
+    auto_switch_artists: true,
+  });
+  const [savingConfig, setSavingConfig] = useState(false);
+  const [subscription, setSubscription] = useState(null);
+  const [startingSubscription, setStartingSubscription] = useState(null);
 
   // Relógio atualizado a cada minuto
   useEffect(() => {
@@ -62,13 +75,67 @@ export default function TVModePage() {
     minute: '2-digit',
   });
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadVenueConfig() {
+      if (!profile?.id) return;
+      const { data } = await getVenueProfile(profile.id);
+      const { data: subscriptionData } = await getActiveSubscription(profile.id);
+      if (!cancelled) setSubscription(subscriptionData || null);
+      if (!cancelled && data) {
+        setVenueConfig({
+          preferred_genre: data.preferred_genre || '',
+          vibe_level: data.vibe_level || 'animado',
+          interaction_level: data.interaction_level || 'medium',
+          preferred_region: data.preferred_region || '',
+          audience_participation: data.audience_participation !== false,
+          auto_switch_artists: data.auto_switch_artists !== false,
+        });
+      }
+    }
+
+    loadVenueConfig();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [profile?.id]);
+
+  async function updateVenueConfig(key, value) {
+    const next = { ...venueConfig, [key]: value };
+    setVenueConfig(next);
+
+    if (!profile?.id) return;
+    setSavingConfig(true);
+    try {
+      await upsertVenueProfile(profile.id, next);
+    } finally {
+      setSavingConfig(false);
+    }
+  }
+
+  async function startSubscription(planTier) {
+    setStartingSubscription(planTier);
+    try {
+      await createSubscriptionCheckout(planTier, '/tv');
+    } finally {
+      setStartingSubscription(null);
+    }
+  }
+
   const activeRoomId = selectedRoom?.id;
   const activeRoom = rooms.find((r) => r.id === activeRoomId) || selectedRoom;
   const activeArtists = getActiveArtists(activeRoom);
   const selectedArtist = getPrimaryArtist(activeRoom, selectedArtistId);
+  const recommendedRooms = rooms.filter((room) => {
+    const genreOk = !venueConfig.preferred_genre || room.genre === venueConfig.preferred_genre;
+    const vibeOk = !venueConfig.vibe_level || !room.vibe_level || room.vibe_level === venueConfig.vibe_level;
+    return genreOk && vibeOk;
+  });
 
   // Conecta ao WebSocket da sala para chat, alertas e pedidos reais em tempo real
-  const { tvAlerts, activeRequests } = useRoomRealtime(activeRoomId, {
+  const { tvAlerts, activeRequests, activeBattles, battleResults } = useRoomRealtime(activeRoomId, {
     targetArtistId: selectedArtist?.id || null,
   });
 
@@ -93,11 +160,81 @@ export default function TVModePage() {
           Selecione um ambiente musical para exibir no telão do seu estabelecimento.
         </p>
 
+        <div className="mb-6 flex flex-wrap items-center justify-center gap-3">
+          <Badge variant={subscription ? 'success' : 'default'}>
+            Plano {subscription?.plan_tier || 'free'}
+          </Badge>
+          {!subscription && (
+            <>
+              <button
+                type="button"
+                onClick={() => startSubscription('basic')}
+                disabled={startingSubscription !== null}
+                className="rounded-xl border border-palco-gold/40 px-4 py-2 text-sm font-black text-palco-gold transition hover:bg-palco-gold hover:text-palco-black disabled:opacity-60"
+              >
+                {startingSubscription === 'basic' ? 'Abrindo...' : 'Assinar Basico'}
+              </button>
+              <button
+                type="button"
+                onClick={() => startSubscription('premium')}
+                disabled={startingSubscription !== null}
+                className="rounded-xl bg-palco-gold px-4 py-2 text-sm font-black text-palco-black transition hover:bg-palco-gold-light disabled:opacity-60"
+              >
+                {startingSubscription === 'premium' ? 'Abrindo...' : 'Assinar Premium'}
+              </button>
+            </>
+          )}
+        </div>
+
+        <div className="mb-8 grid w-full max-w-5xl gap-3 rounded-3xl border border-palco-border bg-palco-card/70 p-4 backdrop-blur lg:grid-cols-5">
+          <select
+            value={venueConfig.preferred_genre}
+            onChange={(event) => updateVenueConfig('preferred_genre', event.target.value)}
+            className="rounded-xl border border-palco-border bg-palco-dark px-3 py-2 text-sm text-palco-text outline-none focus:border-palco-gold"
+          >
+            <option value="">Todos os generos</option>
+            {MUSIC_GENRES.map((genre) => (
+              <option key={genre} value={genre}>{genre}</option>
+            ))}
+          </select>
+          <select
+            value={venueConfig.vibe_level}
+            onChange={(event) => updateVenueConfig('vibe_level', event.target.value)}
+            className="rounded-xl border border-palco-border bg-palco-dark px-3 py-2 text-sm text-palco-text outline-none focus:border-palco-gold"
+          >
+            <option value="calmo">Calmo</option>
+            <option value="animado">Animado</option>
+            <option value="interativo">Interativo</option>
+          </select>
+          <select
+            value={venueConfig.interaction_level}
+            onChange={(event) => updateVenueConfig('interaction_level', event.target.value)}
+            className="rounded-xl border border-palco-border bg-palco-dark px-3 py-2 text-sm text-palco-text outline-none focus:border-palco-gold"
+          >
+            <option value="low">Pouca interacao</option>
+            <option value="medium">Interacao media</option>
+            <option value="high">Muita interacao</option>
+          </select>
+          <select
+            value={venueConfig.preferred_region}
+            onChange={(event) => updateVenueConfig('preferred_region', event.target.value)}
+            className="rounded-xl border border-palco-border bg-palco-dark px-3 py-2 text-sm text-palco-text outline-none focus:border-palco-gold"
+          >
+            <option value="">Todas as regioes</option>
+            {BRAZIL_REGIONS.map((region) => (
+              <option key={region.value} value={region.value}>{region.label}</option>
+            ))}
+          </select>
+          <div className="flex items-center justify-center rounded-xl border border-palco-border bg-palco-dark px-3 py-2 text-xs font-bold text-palco-text-muted">
+            {savingConfig ? 'Salvando...' : 'Preferencias ativas'}
+          </div>
+        </div>
+
         {loading ? (
           <p className="text-palco-text-muted text-lg">Carregando salas...</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 w-full max-w-5xl relative z-10">
-            {rooms.map((room) => (
+            {(recommendedRooms.length > 0 ? recommendedRooms : rooms).map((room) => (
               <button
                 key={room.id}
                 onClick={() => {
@@ -130,13 +267,20 @@ export default function TVModePage() {
     );
   }
 
-  const artistName = selectedArtist?.name;
   const publicInteractionUrl = `${window.location.origin}${getArtistInteractionUrl(selectedRoom.id, selectedArtist?.id)}`;
 
   // Pedidos na fila (aceitos ou tocando)
   const acceptedRequests = activeRequests.filter(
     (req) => req.status === 'accepted' || req.status === 'playing' || req.status === 'pending'
   );
+  const featuredBattle = activeBattles.find((battle) =>
+    selectedArtist?.id
+      ? [battle.challenger_artist_id, battle.opponent_artist_id].includes(selectedArtist.id)
+      : true
+  );
+  const featuredBattleVotes = featuredBattle
+    ? (battleResults[featuredBattle.id] || []).reduce((sum, item) => sum + Number(item.vote_count || 0), 0)
+    : 0;
 
   return (
     <div className="min-h-screen bg-palco-black flex flex-col relative overflow-hidden select-none">
@@ -286,6 +430,19 @@ export default function TVModePage() {
           
           {/* BOX 1: Pedidos List */}
           <div className="rounded-3xl border border-palco-border bg-palco-card/45 backdrop-blur-sm p-6 flex flex-col overflow-hidden">
+            {featuredBattle && (
+              <div className="mb-4 rounded-2xl border border-palco-gold/35 bg-palco-gold/10 p-4">
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-palco-gold">
+                  Batalha musical
+                </p>
+                <h3 className="mt-2 font-display text-xl font-black text-white">
+                  {featuredBattle.song_title}
+                </h3>
+                <p className="mt-1 text-sm text-palco-text-muted">
+                  {featuredBattle.status} - {featuredBattleVotes} votos
+                </p>
+              </div>
+            )}
             <h3 className="font-display font-black text-lg text-palco-text mb-4 tracking-wider uppercase border-b border-palco-border/30 pb-3 flex items-center gap-2">
               <span>📋</span> Pedidos na Fila
             </h3>

@@ -26,3 +26,9 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/confirm-checkout/deno.json"
 entrypoint = "./functions/confirm-checkout/index.ts"
+
+[functions.create-subscription]
+enabled = true
+verify_jwt = false
+import_map = "./functions/create-subscription/deno.json"
+entrypoint = "./functions/create-subscription/index.ts"

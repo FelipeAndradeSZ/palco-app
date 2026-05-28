@@ -11,10 +11,11 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { isAdminUser } from '../../services/curatorService';
 import Button from '../ui/Button';
 
 export default function Header() {
-  const { isAuthenticated, isArtist, isVenue, profile, signOut } = useAuth();
+  const { isAuthenticated, isArtist, isVenue, profile, user, signOut } = useAuth();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -76,6 +77,24 @@ export default function Header() {
               className="text-sm font-medium text-palco-text-muted hover:text-palco-gold transition-colors no-underline"
             >
               Modo TV
+            </Link>
+          )}
+
+          {isAuthenticated && (
+            <Link
+              to="/marketplace"
+              className="text-sm font-medium text-palco-text-muted hover:text-palco-gold transition-colors no-underline"
+            >
+              Contratar
+            </Link>
+          )}
+
+          {isAuthenticated && isAdminUser(user) && (
+            <Link
+              to="/admin"
+              className="text-sm font-medium text-palco-text-muted hover:text-palco-gold transition-colors no-underline"
+            >
+              Admin
             </Link>
           )}
         </nav>
@@ -172,6 +191,26 @@ export default function Header() {
                 className="rounded-lg px-3 py-2.5 text-sm font-medium text-palco-text-muted hover:text-palco-gold hover:bg-white/5 transition-colors no-underline"
               >
                 Modo TV
+              </Link>
+            )}
+
+            {isAuthenticated && (
+              <Link
+                to="/marketplace"
+                onClick={closeMobile}
+                className="rounded-lg px-3 py-2.5 text-sm font-medium text-palco-text-muted hover:text-palco-gold hover:bg-white/5 transition-colors no-underline"
+              >
+                Contratar
+              </Link>
+            )}
+
+            {isAuthenticated && isAdminUser(user) && (
+              <Link
+                to="/admin"
+                onClick={closeMobile}
+                className="rounded-lg px-3 py-2.5 text-sm font-medium text-palco-text-muted hover:text-palco-gold hover:bg-white/5 transition-colors no-underline"
+              >
+                Admin
               </Link>
             )}
 

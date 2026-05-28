@@ -5,6 +5,7 @@ import { useRoomMediaStream } from '../hooks/useRoomMediaStream';
 import { getRoomById, joinRoom, leaveRoom } from '../services/roomService';
 import { getWallet, addFundsCheckout } from '../services/walletService';
 import { createSongRequest, sendTip } from '../services/bountyService';
+import { createBattle, voteBattle } from '../services/battleService';
 import { useAuth } from '../hooks/useAuth';
 import Spinner from '../components/ui/Spinner';
 import Badge from '../components/ui/Badge';
@@ -12,7 +13,7 @@ import RequestSongModal from '../components/features/bounty/RequestSongModal';
 import LiveStreamPlayer from '../components/features/video/LiveStreamPlayer';
 import TikTokInteractions from '../components/features/video/TikTokInteractions';
 import { getActiveArtists } from '../lib/roomArtists';
-import { BOUNTY_PRESETS } from '../lib/constants';
+import { BATTLE_CATEGORIES, BOUNTY_PRESETS } from '../lib/constants';
 import { sanitizeText, validateBountyValue, validateChatMessage } from '../lib/validators';
 
 const VOTE_OPTIONS = [
@@ -358,6 +359,131 @@ function LiveActions({
   );
 }
 
+function BattlePanel({
+  selectedArtist,
+  activeArtists,
+  activeBattles,
+  battleResults,
+  battleSong,
+  setBattleSong,
+  battleAmount,
+  setBattleAmount,
+  battleOpponentId,
+  setBattleOpponentId,
+  battleLoading,
+  onCreateBattle,
+  onVoteBattle,
+}) {
+  const currentBattle = activeBattles.find((battle) =>
+    [battle.challenger_artist_id, battle.opponent_artist_id].includes(selectedArtist.id)
+  );
+  const opponents = activeArtists.filter((artist) => artist.id !== selectedArtist.id);
+
+  function countVotes(battleId, artistId) {
+    return (battleResults[battleId] || [])
+      .filter((item) => item.artist_id === artistId)
+      .reduce((sum, item) => sum + Number(item.vote_count || 0), 0);
+  }
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-palco-card p-4">
+      <p className="text-xs font-black uppercase tracking-[0.18em] text-palco-gold">Batalha musical</p>
+
+      {currentBattle ? (
+        <div className="mt-4 space-y-4">
+          <div className="rounded-xl border border-palco-gold/30 bg-palco-gold/10 p-3">
+            <p className="font-display text-lg font-black text-white">{currentBattle.song_title}</p>
+            <p className="mt-1 text-xs text-palco-text-muted">
+              {currentBattle.status === 'pending' ? 'Aguardando aceite dos artistas' : 'Votacao aberta para o publico'}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 text-center">
+            {[
+              [currentBattle.challenger_artist_id, currentBattle.challenger?.name || 'Artista 1'],
+              [currentBattle.opponent_artist_id, currentBattle.opponent?.name || 'Artista 2'],
+            ].map(([artistId, name]) => (
+              <div key={artistId} className="rounded-xl border border-white/10 bg-black/30 p-3">
+                <p className="truncate text-sm font-bold text-white">{name}</p>
+                <p className="mt-1 font-display text-2xl font-black text-palco-gold">
+                  {countVotes(currentBattle.id, artistId)}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div className="space-y-3">
+            {BATTLE_CATEGORIES.map((category) => (
+              <div key={category.key} className="rounded-xl border border-white/10 bg-black/25 p-2">
+                <p className="mb-2 text-xs font-black uppercase tracking-[0.12em] text-palco-text-subtle">
+                  {category.label}
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    [currentBattle.challenger_artist_id, currentBattle.challenger?.name || 'Artista 1'],
+                    [currentBattle.opponent_artist_id, currentBattle.opponent?.name || 'Artista 2'],
+                  ].map(([artistId, name]) => (
+                    <button
+                      key={`${category.key}-${artistId}`}
+                      type="button"
+                      onClick={() => onVoteBattle(currentBattle, artistId, category.key)}
+                      className="rounded-lg bg-white/[0.05] px-2 py-2 text-xs font-bold text-palco-text-muted transition hover:bg-palco-gold hover:text-palco-black"
+                    >
+                      {name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : opponents.length > 0 ? (
+        <form onSubmit={onCreateBattle} className="mt-4 space-y-3">
+          <select
+            value={battleOpponentId}
+            onChange={(event) => setBattleOpponentId(event.target.value)}
+            className="w-full rounded-xl border border-white/10 bg-black/35 px-3 py-2 text-sm text-white outline-none focus:border-palco-gold"
+          >
+            <option value="">Escolha o desafiante</option>
+            {opponents.map((artist) => (
+              <option key={artist.id} value={artist.id}>{artist.name}</option>
+            ))}
+          </select>
+          <input
+            value={battleSong}
+            onChange={(event) => setBattleSong(event.target.value)}
+            placeholder="Musica da batalha"
+            maxLength={200}
+            className="w-full rounded-xl border border-white/10 bg-black/35 px-3 py-2 text-sm text-white outline-none placeholder:text-palco-text-subtle focus:border-palco-gold"
+          />
+          <label className="flex items-center gap-2 text-sm text-palco-text-muted">
+            R$
+            <input
+              type="number"
+              min="5"
+              step="0.01"
+              value={battleAmount}
+              onChange={(event) => setBattleAmount(event.target.value)}
+              className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/35 px-3 py-2 text-white outline-none focus:border-palco-gold"
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={battleLoading || !battleOpponentId || !battleSong.trim()}
+            className="w-full rounded-xl bg-palco-gold px-4 py-3 text-sm font-black text-palco-black transition hover:bg-palco-gold-light disabled:opacity-60"
+          >
+            {battleLoading ? 'Criando...' : 'Criar batalha paga'}
+          </button>
+        </form>
+      ) : (
+        <p className="mt-3 text-sm text-palco-text-muted">
+          Precisa ter pelo menos dois artistas ao vivo nesta sala.
+        </p>
+      )}
+    </div>
+  );
+}
+
 
 function DesktopLiveRoom({
   room,
@@ -393,6 +519,18 @@ function DesktopLiveRoom({
   incomingLike,
   sendLike,
   tvAlerts,
+  activeArtists,
+  activeBattles,
+  battleResults,
+  battleSong,
+  setBattleSong,
+  battleAmount,
+  setBattleAmount,
+  battleOpponentId,
+  setBattleOpponentId,
+  battleLoading,
+  handleCreateBattle,
+  handleBattleVote,
 }) {
   return (
     <div className="mx-auto min-h-[calc(100vh-4rem)] max-w-7xl px-5 py-6">
@@ -506,6 +644,23 @@ function DesktopLiveRoom({
               feedback={feedback}
             />
           )}
+          {profile?.role === 'listener' && (
+            <BattlePanel
+              selectedArtist={selectedArtist}
+              activeArtists={activeArtists}
+              activeBattles={activeBattles}
+              battleResults={battleResults}
+              battleSong={battleSong}
+              setBattleSong={setBattleSong}
+              battleAmount={battleAmount}
+              setBattleAmount={setBattleAmount}
+              battleOpponentId={battleOpponentId}
+              setBattleOpponentId={setBattleOpponentId}
+              battleLoading={battleLoading}
+              onCreateBattle={handleCreateBattle}
+              onVoteBattle={handleBattleVote}
+            />
+          )}
         </aside>
       </div>
     </div>
@@ -531,6 +686,10 @@ export default function RoomPage() {
   const [tipMessage, setTipMessage] = useState('');
   const [tipLoading, setTipLoading] = useState(false);
   const [feedback, setFeedback] = useState(null);
+  const [battleSong, setBattleSong] = useState('');
+  const [battleAmount, setBattleAmount] = useState(20);
+  const [battleOpponentId, setBattleOpponentId] = useState('');
+  const [battleLoading, setBattleLoading] = useState(false);
 
 
   const handleRoomUpdate = useCallback(async () => {
@@ -545,7 +704,18 @@ export default function RoomPage() {
 
   const [incomingLike, setIncomingLike] = useState(null);
 
-  const { messages, isConnected, sendChatMessage, votes, userVotes, castVote, sendLike, tvAlerts } = useRoomRealtime(roomId, {
+  const {
+    messages,
+    isConnected,
+    sendChatMessage,
+    votes,
+    userVotes,
+    castVote,
+    sendLike,
+    tvAlerts,
+    activeBattles,
+    battleResults,
+  } = useRoomRealtime(roomId, {
     onRoomUpdate: handleRoomUpdate,
     targetArtistId: selectedArtist?.id || null,
     onLikeReceived: (payload) => {
@@ -694,6 +864,56 @@ export default function RoomPage() {
     }
   }
 
+  async function handleCreateBattle(event) {
+    event.preventDefault();
+    setFeedback(null);
+
+    const amountValidation = validateBountyValue(battleAmount);
+    if (!amountValidation.valid) {
+      setFeedback({ type: 'error', message: amountValidation.error });
+      return;
+    }
+
+    if ((wallet?.balance || 0) < Number(battleAmount)) {
+      setFeedback({ type: 'error', message: 'Saldo insuficiente para criar essa batalha.' });
+      return;
+    }
+
+    setBattleLoading(true);
+    try {
+      const { error } = await createBattle({
+        roomId,
+        challengerArtistId: selectedArtist.id,
+        opponentArtistId: battleOpponentId,
+        songTitle: sanitizeText(battleSong),
+        bountyValue: Number(battleAmount),
+      });
+
+      if (error) throw error;
+
+      const { data } = await getWallet(profile.id);
+      if (data) setWallet(data);
+
+      setBattleSong('');
+      setBattleOpponentId('');
+      setFeedback({ type: 'success', message: 'Batalha criada. Os artistas podem aceitar e abrir a disputa.' });
+    } catch (err) {
+      setFeedback({ type: 'error', message: err.message || 'Nao foi possivel criar a batalha.' });
+    } finally {
+      setBattleLoading(false);
+    }
+  }
+
+  async function handleBattleVote(battle, artistId, category) {
+    try {
+      const { error } = await voteBattle({ battleId: battle.id, artistId, category });
+      if (error) throw error;
+      setFeedback({ type: 'success', message: 'Voto de batalha registrado.' });
+    } catch (err) {
+      setFeedback({ type: 'error', message: err.message || 'Nao foi possivel votar na batalha.' });
+    }
+  }
+
   if (loading || !room) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -749,6 +969,18 @@ export default function RoomPage() {
           incomingLike={incomingLike}
           sendLike={sendLike}
           tvAlerts={tvAlerts}
+          activeArtists={activeArtists}
+          activeBattles={activeBattles}
+          battleResults={battleResults}
+          battleSong={battleSong}
+          setBattleSong={setBattleSong}
+          battleAmount={battleAmount}
+          setBattleAmount={setBattleAmount}
+          battleOpponentId={battleOpponentId}
+          setBattleOpponentId={setBattleOpponentId}
+          battleLoading={battleLoading}
+          handleCreateBattle={handleCreateBattle}
+          handleBattleVote={handleBattleVote}
         />
       </div>
 
@@ -878,6 +1110,26 @@ export default function RoomPage() {
               votes={votes}
               userVotes={userVotes}
               feedback={feedback}
+            />
+          </div>
+        )}
+
+        {profile?.role === 'listener' && (
+          <div className="mt-3">
+            <BattlePanel
+              selectedArtist={selectedArtist}
+              activeArtists={activeArtists}
+              activeBattles={activeBattles}
+              battleResults={battleResults}
+              battleSong={battleSong}
+              setBattleSong={setBattleSong}
+              battleAmount={battleAmount}
+              setBattleAmount={setBattleAmount}
+              battleOpponentId={battleOpponentId}
+              setBattleOpponentId={setBattleOpponentId}
+              battleLoading={battleLoading}
+              onCreateBattle={handleCreateBattle}
+              onVoteBattle={handleBattleVote}
             />
           </div>
         )}

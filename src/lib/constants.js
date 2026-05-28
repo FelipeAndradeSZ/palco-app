@@ -64,6 +64,14 @@ export const VIBE_LEVEL_LABELS = Object.freeze({
   [VIBE_LEVELS.INTERATIVO]: '🎤 Interativo',
 });
 
+export const BRAZIL_REGIONS = Object.freeze([
+  { value: 'norte', label: 'Norte' },
+  { value: 'nordeste', label: 'Nordeste' },
+  { value: 'centro-oeste', label: 'Centro-Oeste' },
+  { value: 'sudeste', label: 'Sudeste' },
+  { value: 'sul', label: 'Sul' },
+]);
+
 // ============================
 // Status de pedidos musicais
 // ============================
@@ -87,10 +95,19 @@ export const REQUEST_STATUS_LABELS = Object.freeze({
 // Status de batalhas
 // ============================
 export const BATTLE_STATUS = Object.freeze({
+  PENDING: 'pending',
   ACTIVE: 'active',
   VOTING: 'voting',
   FINISHED: 'finished',
+  CANCELLED: 'cancelled',
 });
+
+export const BATTLE_CATEGORIES = Object.freeze([
+  { key: 'voice', label: 'Melhor voz' },
+  { key: 'interpretation', label: 'Interpretacao' },
+  { key: 'solo', label: 'Melhor solo' },
+  { key: 'presence', label: 'Presenca' },
+]);
 
 // ============================
 // Tipos de transação

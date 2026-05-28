@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { subscribeToRoom, unsubscribeFromRoom } from '../services/realtimeService';
 import { getRecentMessages, sendMessage } from '../services/chatService';
 import { getActiveRequests } from '../services/bountyService';
+import { getActiveBattles, getBattleResults } from '../services/battleService';
 import { getProfile } from '../services/profileService';
 import { useAuth } from './useAuth';
 import { supabase } from '../lib/supabase';
@@ -12,6 +13,8 @@ export function useRoomRealtime(roomId, options = {}) {
   const { onRoomUpdate, targetArtistId = null } = options;
   const [messages, setMessages] = useState([]);
   const [activeRequests, setActiveRequests] = useState([]);
+  const [activeBattles, setActiveBattles] = useState([]);
+  const [battleResults, setBattleResults] = useState({});
   const [tvAlerts, setTvAlerts] = useState([]);
   const [votes, setVotes] = useState({ voice: 0, repertoire: 0, presence: 0 });
   const [userVotes, setUserVotes] = useState([]);
@@ -47,6 +50,8 @@ export function useRoomRealtime(roomId, options = {}) {
   useEffect(() => {
     setMessages([]);
     setActiveRequests([]);
+    setActiveBattles([]);
+    setBattleResults({});
     setTvAlerts([]);
     setVotes({ voice: 0, repertoire: 0, presence: 0 });
     setUserVotes([]);
@@ -62,6 +67,20 @@ export function useRoomRealtime(roomId, options = {}) {
 
         const { data: requests } = await getActiveRequests(roomId, targetArtistId);
         if (isMounted && requests) setActiveRequests(requests);
+
+        const { data: battles } = await getActiveBattles(roomId);
+        if (isMounted && battles) {
+          setActiveBattles(battles);
+
+          const resultEntries = await Promise.all(
+            battles.map(async (battle) => {
+              const { data: results } = await getBattleResults(battle.id);
+              return [battle.id, results || []];
+            })
+          );
+
+          if (isMounted) setBattleResults(Object.fromEntries(resultEntries));
+        }
 
         if (targetArtistId) {
           const { data: votesData } = await supabase.rpc('get_artist_votes', {
@@ -149,6 +168,36 @@ export function useRoomRealtime(roomId, options = {}) {
           [newVote.category]: (prev[newVote.category] || 0) + 1,
         }));
       },
+      onBattleUpdate: ({ eventType, newRecord, oldRecord }) => {
+        if (!isMounted) return;
+
+        if (eventType === 'INSERT') {
+          setActiveBattles((prev) => {
+            if (prev.some((battle) => battle.id === newRecord.id)) return prev;
+            return [newRecord, ...prev];
+          });
+        } else if (eventType === 'UPDATE') {
+          if (newRecord.status === 'finished' || newRecord.status === 'cancelled') {
+            setActiveBattles((prev) => prev.filter((battle) => battle.id !== newRecord.id));
+          } else {
+            setActiveBattles((prev) =>
+              prev.map((battle) => (battle.id === newRecord.id ? { ...battle, ...newRecord } : battle))
+            );
+          }
+        } else if (eventType === 'DELETE') {
+          setActiveBattles((prev) => prev.filter((battle) => battle.id !== oldRecord.id));
+        }
+      },
+      onBattleVote: async (payload) => {
+        if (!isMounted) return;
+        const battleId = payload.new?.battle_id || payload.old?.battle_id;
+        if (!battleId) return;
+
+        const { data: results } = await getBattleResults(battleId);
+        if (isMounted) {
+          setBattleResults((prev) => ({ ...prev, [battleId]: results || [] }));
+        }
+      },
       onLikeTap: (payload) => {
         console.log('[useRoomRealtime] onLikeTap event fired:', payload);
         if (isMounted && options.onLikeReceived) {
@@ -204,6 +253,17 @@ export function useRoomRealtime(roomId, options = {}) {
     });
   }, [user]);
 
-  return { messages, activeRequests, tvAlerts, isConnected, sendChatMessage, votes, userVotes, castVote, sendLike };
+  return {
+    messages,
+    activeRequests,
+    activeBattles,
+    battleResults,
+    tvAlerts,
+    isConnected,
+    sendChatMessage,
+    votes,
+    userVotes,
+    castVote,
+    sendLike,
+  };
 }
-

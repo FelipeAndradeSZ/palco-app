@@ -13,7 +13,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import * as authService from '../services/authService';
-import { getProfile, updateProfile } from '../services/profileService';
+import { getProfile } from '../services/profileService';
 import { AuthContext } from './AuthContextObject';
 
 export function AuthProvider({ children }) {

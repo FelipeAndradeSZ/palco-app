@@ -11,6 +11,8 @@ export function subscribeToRoom(roomId, {
   onConnectionStatus,
   onVoteCast,
   onLikeTap,
+  onBattleUpdate,
+  onBattleVote,
 } = {}) {
   // Use a unique channel for database changes to avoid duplicate/overlapping unsubscribe conflicts
   const dbChannelId = crypto.randomUUID();
@@ -29,6 +31,36 @@ export function subscribeToRoom(roomId, {
     },
     (payload) => {
       if (onNewMessage) onNewMessage(payload.new);
+    }
+  );
+
+  dbChannel.on(
+    'postgres_changes',
+    {
+      event: '*',
+      schema: 'public',
+      table: 'battles',
+      filter: `room_id=eq.${roomId}`,
+    },
+    (payload) => {
+      if (!onBattleUpdate) return;
+      onBattleUpdate({
+        eventType: payload.eventType,
+        newRecord: payload.new,
+        oldRecord: payload.old,
+      });
+    }
+  );
+
+  dbChannel.on(
+    'postgres_changes',
+    {
+      event: '*',
+      schema: 'public',
+      table: 'battle_votes',
+    },
+    (payload) => {
+      if (onBattleVote) onBattleVote(payload);
     }
   );
 

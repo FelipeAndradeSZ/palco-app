@@ -4,7 +4,7 @@ import { updateProfile, upsertArtistDetails } from '../services/profileService';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
-import { MUSIC_GENRES, USER_ROLE_LABELS } from '../lib/constants';
+import { BRAZIL_REGIONS, MUSIC_GENRES, USER_ROLE_LABELS } from '../lib/constants';
 
 export default function ProfilePage() {
   const { profile, refreshProfile } = useAuth();
@@ -17,6 +17,10 @@ export default function ProfilePage() {
     pixKey: artistDetails.pix_key || '',
     instagramUrl: artistDetails.instagram_url || '',
     bookingWhatsapp: artistDetails.booking_whatsapp || '',
+    city: artistDetails.city || '',
+    state: artistDetails.state || '',
+    region: artistDetails.region || '',
+    availableForBooking: artistDetails.available_for_booking !== false,
   });
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState(null);
@@ -33,6 +37,10 @@ export default function ProfilePage() {
       pixKey: details.pix_key || '',
       instagramUrl: details.instagram_url || '',
       bookingWhatsapp: details.booking_whatsapp || '',
+      city: details.city || '',
+      state: details.state || '',
+      region: details.region || '',
+      availableForBooking: details.available_for_booking !== false,
     });
   }, [profile]);
 
@@ -65,6 +73,10 @@ export default function ProfilePage() {
           pix_key: form.pixKey.trim() || null,
           instagram_url: form.instagramUrl.trim() || null,
           booking_whatsapp: form.bookingWhatsapp.trim() || null,
+          city: form.city.trim() || null,
+          state: form.state.trim() || null,
+          region: form.region || null,
+          available_for_booking: form.availableForBooking,
         };
 
         const detailsResult = await upsertArtistDetails(profile.id, detailsPayload);
@@ -180,6 +192,54 @@ export default function ProfilePage() {
                       className="w-full rounded-xl border border-palco-border bg-palco-dark px-4 py-3 text-sm text-palco-text outline-none focus:border-palco-gold"
                       maxLength={40}
                     />
+                  </label>
+
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-medium text-palco-text-muted">Cidade base</span>
+                    <input
+                      value={form.city}
+                      onChange={(event) => updateField('city', event.target.value)}
+                      className="w-full rounded-xl border border-palco-border bg-palco-dark px-4 py-3 text-sm text-palco-text outline-none focus:border-palco-gold"
+                      maxLength={120}
+                      placeholder="Ex: Curitiba"
+                    />
+                  </label>
+
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-medium text-palco-text-muted">Estado</span>
+                    <input
+                      value={form.state}
+                      onChange={(event) => updateField('state', event.target.value)}
+                      className="w-full rounded-xl border border-palco-border bg-palco-dark px-4 py-3 text-sm text-palco-text outline-none focus:border-palco-gold"
+                      maxLength={2}
+                      placeholder="PR"
+                    />
+                  </label>
+
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-medium text-palco-text-muted">Regiao</span>
+                    <select
+                      value={form.region}
+                      onChange={(event) => updateField('region', event.target.value)}
+                      className="w-full rounded-xl border border-palco-border bg-palco-dark px-4 py-3 text-sm text-palco-text outline-none focus:border-palco-gold"
+                    >
+                      <option value="">Selecione</option>
+                      {BRAZIL_REGIONS.map((region) => (
+                        <option key={region.value} value={region.value}>{region.label}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="flex items-center gap-3 rounded-xl border border-palco-border bg-palco-dark px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={form.availableForBooking}
+                      onChange={(event) => updateField('availableForBooking', event.target.checked)}
+                      className="h-4 w-4 accent-palco-gold"
+                    />
+                    <span className="text-sm font-medium text-palco-text-muted">
+                      Disponivel para contratacao presencial
+                    </span>
                   </label>
 
                   <label className="block lg:col-span-2">

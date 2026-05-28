@@ -25,6 +25,8 @@ import RoomsPage from './pages/RoomsPage';
 import PublicInteractionPage from './pages/PublicInteractionPage';
 import ProfilePage from './pages/ProfilePage';
 import WalletReturnPage from './pages/WalletReturnPage';
+import AdminCuratorPage from './pages/AdminCuratorPage';
+import MarketplacePage from './pages/MarketplacePage';
 import OnboardingModal from './components/features/auth/OnboardingModal';
 
 export default function App() {
@@ -92,6 +94,27 @@ export default function App() {
           />
 
           {/* Rotas de Auth (sem AppShell — layout próprio) */}
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute>
+                <AppShell>
+                  <AdminCuratorPage />
+                </AppShell>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/marketplace"
+            element={
+              <ProtectedRoute>
+                <AppShell>
+                  <MarketplacePage />
+                </AppShell>
+              </ProtectedRoute>
+            }
+          />
+
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
 

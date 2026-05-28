@@ -315,7 +315,9 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
         if (listenerPeerRef.current) {
           try {
             listenerPeerRef.current.close();
-          } catch (e) {}
+          } catch {
+            // Peer was already closed by the browser.
+          }
           listenerPeerRef.current = null;
         }
         setStatus('waiting_artist');

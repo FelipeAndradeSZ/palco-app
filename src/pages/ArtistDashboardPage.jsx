@@ -6,6 +6,7 @@ import { useRoomRealtime } from '../hooks/useRoomRealtime';
 import { useRoomMediaStream } from '../hooks/useRoomMediaStream';
 import { updateRoomArtist } from '../services/roomService';
 import { clearArtistChat } from '../services/chatService';
+import { acceptBattle, cancelBattle, finishBattle, startBattleVoting } from '../services/battleService';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
@@ -17,7 +18,96 @@ import ChatBox from '../components/features/chat/ChatBox';
 import LocalCamera from '../components/features/video/LocalCamera';
 import { QUALITY_TIER_LABELS } from '../lib/constants';
 import { getActiveArtists, roomHasArtist } from '../lib/roomArtists';
-import { getWallet, requestWithdrawal, getWithdrawalRequests, getTransactions, simulateApproveWithdrawal, simulateRejectWithdrawal } from '../services/walletService';
+import { getWallet, requestWithdrawal, getWithdrawalRequests, getTransactions } from '../services/walletService';
+
+function ArtistBattleControls({ battles, profileId, onChanged }) {
+  const [processingId, setProcessingId] = useState(null);
+  const artistBattles = battles.filter((battle) =>
+    [battle.challenger_artist_id, battle.opponent_artist_id].includes(profileId)
+  );
+
+  async function runAction(battleId, action) {
+    setProcessingId(battleId);
+    try {
+      const { error } = await action(battleId);
+      if (error) throw error;
+      if (onChanged) await onChanged();
+    } catch (err) {
+      console.error('Erro ao atualizar batalha:', err);
+    } finally {
+      setProcessingId(null);
+    }
+  }
+
+  if (artistBattles.length === 0) return null;
+
+  return (
+    <section className="rounded-2xl border border-palco-gold/25 bg-palco-gold/10 p-4">
+      <h3 className="font-display text-lg font-black text-palco-gold">Batalhas musicais</h3>
+      <div className="mt-3 space-y-3">
+        {artistBattles.map((battle) => {
+          const rival = battle.challenger_artist_id === profileId
+            ? battle.opponent?.name || 'Artista desafiante'
+            : battle.challenger?.name || 'Artista desafiante';
+
+          return (
+            <div key={battle.id} className="rounded-xl border border-white/10 bg-black/35 p-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-display font-bold text-white">{battle.song_title}</p>
+                  <p className="mt-1 text-xs text-palco-text-muted">
+                    Contra {rival} - R$ {Number(battle.bounty_value || 0).toFixed(2)} - {battle.status}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {battle.status === 'pending' && (
+                    <Button
+                      size="sm"
+                      onClick={() => runAction(battle.id, acceptBattle)}
+                      loading={processingId === battle.id}
+                    >
+                      Aceitar
+                    </Button>
+                  )}
+                  {(battle.status === 'pending' || battle.status === 'active') && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => runAction(battle.id, startBattleVoting)}
+                      loading={processingId === battle.id}
+                    >
+                      Abrir votacao
+                    </Button>
+                  )}
+                  {(battle.status === 'active' || battle.status === 'voting') && (
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      onClick={() => runAction(battle.id, finishBattle)}
+                      loading={processingId === battle.id}
+                    >
+                      Encerrar
+                    </Button>
+                  )}
+                  {battle.status !== 'finished' && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => runAction(battle.id, cancelBattle)}
+                      loading={processingId === battle.id}
+                    >
+                      Cancelar
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
 
 
 export default function ArtistDashboardPage() {
@@ -35,7 +125,6 @@ export default function ArtistDashboardPage() {
   const [withdrawalRequests, setWithdrawalRequests] = useState([]);
   const [fetchingWallet, setFetchingWallet] = useState(false);
   const [submittingWithdrawal, setSubmittingWithdrawal] = useState(false);
-  const [simulatingId, setSimulatingId] = useState(null);
   const [withdrawalAmount, setWithdrawalAmount] = useState('');
   const [withdrawalPixKey, setWithdrawalPixKey] = useState('');
   const [walletFeedback, setWalletFeedback] = useState(null);
@@ -95,7 +184,7 @@ export default function ArtistDashboardPage() {
 
     setSubmittingWithdrawal(true);
     try {
-      const { data, error } = await requestWithdrawal(amount, withdrawalPixKey.trim());
+      const { error } = await requestWithdrawal(amount, withdrawalPixKey.trim());
       if (error) throw error;
 
       setWalletFeedback({ type: 'success', message: `Saque de R$ ${amount.toFixed(2)} solicitado com sucesso!` });
@@ -109,39 +198,6 @@ export default function ArtistDashboardPage() {
     }
   };
 
-  const handleApproveSimulation = async (requestId) => {
-    setSimulatingId(requestId);
-    setWalletFeedback(null);
-    try {
-      const { error } = await simulateApproveWithdrawal(requestId);
-      if (error) throw error;
-      setWalletFeedback({ type: 'success', message: 'Saque aprovado com sucesso (Simulação)!' });
-      await loadWalletData();
-    } catch (err) {
-      setWalletFeedback({ type: 'error', message: err.message || 'Erro na simulação.' });
-    } finally {
-      setSimulatingId(null);
-    }
-  };
-
-  const handleRejectSimulation = async (requestId) => {
-    const reason = prompt('Digite o motivo da recusa (para simulação de estorno):', 'Chave PIX inválida');
-    if (reason === null) return; // cancelado
-
-    setSimulatingId(requestId);
-    setWalletFeedback(null);
-    try {
-      const { error } = await simulateRejectWithdrawal(requestId, reason);
-      if (error) throw error;
-      setWalletFeedback({ type: 'success', message: 'Saque recusado e saldo estornado com sucesso (Simulação)!' });
-      await loadWalletData();
-    } catch (err) {
-      setWalletFeedback({ type: 'error', message: err.message || 'Erro na simulação.' });
-    } finally {
-      setSimulatingId(null);
-    }
-  };
-
   const assignedRoomId = useMemo(() => {
     if (!profile?.id) return null;
     return rooms.find((room) => roomHasArtist(room, profile.id))?.id || null;
@@ -149,7 +205,7 @@ export default function ArtistDashboardPage() {
 
   const activeRoomId = selectedRoomId || assignedRoomId;
   const activeRoom = rooms.find((room) => room.id === activeRoomId);
-  const { activeRequests, messages, isConnected, sendChatMessage } = useRoomRealtime(activeRoomId, {
+  const { activeRequests, activeBattles, messages, isConnected, sendChatMessage } = useRoomRealtime(activeRoomId, {
     targetArtistId: profile?.id || null,
   });
   const mediaStream = useRoomMediaStream({
@@ -322,6 +378,11 @@ export default function ArtistDashboardPage() {
                   error={mediaStream.error}
                   artistName={profile?.name}
                 />
+                <ArtistBattleControls
+                  battles={activeBattles}
+                  profileId={profile?.id}
+                  onChanged={refetchRooms}
+                />
                 <ArtistRequestQueue activeRequests={activeRequests} onStatusChanged={loadWalletData} />
               </div>
 
@@ -462,56 +523,6 @@ export default function ArtistDashboardPage() {
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
             {/* Left side: Transactions ledger & Simulation */}
             <div className="min-w-0 space-y-6">
-              {/* Simulation Developer Panel */}
-              {withdrawalRequests.some(r => r.status === 'pending') && (
-                <div className="rounded-2xl border border-palco-warning/30 bg-palco-warning/10 p-5 shadow-[0_0_15px_rgba(245,158,11,0.1)]">
-                  <div className="mb-3 flex items-center gap-2 text-palco-warning">
-                    <span className="text-xl">⚠️</span>
-                    <span className="font-bold font-display">Painel de Simulação (Desenvolvedor)</span>
-                  </div>
-                  <p className="text-xs text-palco-text-muted mb-4">
-                    Como não há um painel administrativo de produção nesta versão do MVP, use os controles abaixo para aprovar ou rejeitar os saques pendentes e testar o fluxo de alteração de saldo e estorno de créditos.
-                  </p>
-                  <div className="space-y-3">
-                    {withdrawalRequests
-                      .filter(r => r.status === 'pending')
-                      .map(req => (
-                        <div key={req.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-palco-black/40 p-3 border border-palco-border">
-                          <div>
-                            <p className="text-xs font-semibold text-palco-text">
-                              Saque de R$ {Number(req.amount).toFixed(2)}
-                            </p>
-                            <p className="text-[10px] text-palco-text-subtle">
-                              PIX: {req.pix_key}
-                            </p>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-palco-success hover:bg-palco-success/15 py-1 px-2 text-xs"
-                              onClick={() => handleApproveSimulation(req.id)}
-                              loading={simulatingId === req.id}
-                              disabled={simulatingId !== null}
-                            >
-                              ✓ Aprovar
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-palco-live hover:bg-palco-live/15 py-1 px-2 text-xs"
-                              onClick={() => handleRejectSimulation(req.id)}
-                              loading={simulatingId === req.id}
-                              disabled={simulatingId !== null}
-                            >
-                              ✗ Recusar
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              )}
 
               {/* Transactions Ledger */}
               <Card>
@@ -534,8 +545,8 @@ export default function ArtistDashboardPage() {
                           ? Number(trans.amount) - Number(trans.platform_fee || 0)
                           : Number(trans.amount);
                         
-                        let typeLabel = '';
-                        let description = '';
+                        let typeLabel;
+                        let description;
                         let typeBadgeVariant = 'default';
 
                         if (trans.type === 'tip') {
@@ -657,16 +668,13 @@ export default function ArtistDashboardPage() {
                   ) : (
                     <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
                       {withdrawalRequests.map((req) => {
-                        let statusColor = 'text-palco-text-subtle';
                         let statusText = 'Pendente';
                         let statusVariant = 'default';
 
                         if (req.status === 'completed') {
-                          statusColor = 'text-palco-success';
                           statusText = 'Pago';
                           statusVariant = 'success';
                         } else if (req.status === 'rejected') {
-                          statusColor = 'text-palco-live';
                           statusText = 'Recusado';
                           statusVariant = 'live';
                         }
@@ -706,4 +714,3 @@ export default function ArtistDashboardPage() {
     </div>
   );
 }
-
