@@ -32,7 +32,8 @@ export default function ChatBox({ messages, onSendMessage, isConnected }) {
 
     setSending(true);
     try {
-      await onSendMessage(validation.sanitized);
+      const result = await onSendMessage(validation.sanitized);
+      if (result?.error) throw new Error(result.error.message);
       setInputText('');
     } catch (err) {
       console.error('Erro ao enviar mensagem', err);

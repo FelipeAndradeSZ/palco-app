@@ -8,6 +8,7 @@ function shouldFallbackToLegacy(error) {
     message.includes('target_artist_id') ||
     message.includes('request_source') ||
     message.includes('guest_name') ||
+    message.includes('dedication') ||
     message.includes('schema cache') ||
     message.includes('could not find')
   );
@@ -34,6 +35,17 @@ const LEGACY_REQUEST_SELECT = `
   *,
   requester:profiles!song_requests_requester_id_fkey(name, avatar_url)
 `;
+
+function buildRequestAlert(songTitle, bountyValue, dedication) {
+  const amount = Number(bountyValue).toFixed(2);
+  const extra = dedication ? ` Mensagem: ${dedication.trim()}` : '';
+  return `Pediu "${songTitle.trim()}" por R$ ${amount}.${extra}`;
+}
+
+async function notifyRequest(roomId, requesterId, songTitle, bountyValue, dedication) {
+  const content = buildRequestAlert(songTitle, bountyValue, dedication);
+  return sendMessage(roomId, requesterId, content, 'request_alert');
+}
 
 export async function createSongRequest({
   roomId,
@@ -62,19 +74,30 @@ export async function createSongRequest({
     .select()
     .single();
 
-  if (!enhanced.error) return enhanced;
+  if (!enhanced.error) {
+    await notifyRequest(roomId, user.id, payload.song_title, payload.bounty_value, payload.dedication);
+    return enhanced;
+  }
 
   if (!shouldFallbackToLegacy(enhanced.error)) return enhanced;
 
-  const { target_artist_id, request_source, ...legacyPayload } = payload;
-  void target_artist_id;
-  void request_source;
+  const legacyPayload = {
+    room_id: payload.room_id,
+    requester_id: payload.requester_id,
+    song_title: payload.song_title,
+    bounty_value: payload.bounty_value,
+    status: payload.status,
+  };
 
   const legacy = await supabase
     .from('song_requests')
     .insert(legacyPayload)
     .select()
     .single();
+
+  if (!legacy.error) {
+    await notifyRequest(roomId, user.id, payload.song_title, payload.bounty_value, payload.dedication);
+  }
 
   return legacy;
 }
@@ -101,8 +124,21 @@ export async function sendTip(roomId, amount, message, targetArtistId = null) {
   });
 
   if (!rpcResult.error) {
-    await sendMessage(roomId, user.id, content, 'tip_alert');
-    return rpcResult;
+    const messageResult = await sendMessage(roomId, user.id, content, 'tip_alert');
+    if (messageResult.error) {
+      return {
+        data: {
+          ...(rpcResult.data || {}),
+          chat_warning: `Gorjeta paga, mas nao consegui avisar o artista no chat: ${messageResult.error.message}`,
+        },
+        error: null,
+      };
+    }
+
+    return {
+      data: { ...(rpcResult.data || {}), chat_message: messageResult.data },
+      error: null,
+    };
   }
 
   if (!shouldFallbackTipRpc(rpcResult.error)) {

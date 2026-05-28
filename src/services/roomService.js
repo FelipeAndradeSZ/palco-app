@@ -140,7 +140,7 @@ async function chooseNextFeaturedArtist(roomId) {
   return data?.[0]?.artist_id || null;
 }
 
-export async function updateRoomArtist(roomId, artistId) {
+export async function updateRoomArtist(roomId, artistId, currentArtistIdOverride = null) {
   if (artistId) {
     const upsert = await supabase
       .from('room_artists')
@@ -172,7 +172,7 @@ export async function updateRoomArtist(roomId, artistId) {
   }
 
   const { data: authData } = await supabase.auth.getUser();
-  const currentArtistId = authData?.user?.id;
+  const currentArtistId = currentArtistIdOverride || authData?.user?.id;
 
   if (currentArtistId) {
     const update = await supabase
@@ -185,12 +185,12 @@ export async function updateRoomArtist(roomId, artistId) {
       .eq('room_id', roomId)
       .eq('artist_id', currentArtistId)
       .select()
-      .single();
+      .maybeSingle();
 
     if (!update.error) {
       const nextArtistId = await chooseNextFeaturedArtist(roomId);
       await syncLegacyCurrentArtist(roomId, nextArtistId);
-      return update;
+      return { data: update.data, error: null };
     }
 
     if (!shouldFallbackToLegacy(update.error)) {

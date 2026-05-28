@@ -15,6 +15,13 @@ export function useRoomRealtime(roomId, options = {}) {
   const [isConnected, setIsConnected] = useState(false);
   const channelRef = useRef(null);
 
+  const appendMessage = useCallback((message) => {
+    setMessages((prev) => {
+      if (prev.some((item) => item.id === message.id)) return prev;
+      return [...prev, message];
+    });
+  }, []);
+
   const triggerTvAlert = useCallback((alertPayload) => {
     const alertId = crypto.randomUUID();
     const newAlert = { id: alertId, ...alertPayload, timestamp: Date.now() };
@@ -62,7 +69,7 @@ export function useRoomRealtime(roomId, options = {}) {
         const enrichedMsg = await resolveMessageSender(newMsg);
 
         if (!isMounted) return;
-        setMessages((prev) => [...prev, enrichedMsg]);
+        appendMessage(enrichedMsg);
 
         if (newMsg.message_type === 'tip_alert' || newMsg.message_type === 'request_alert') {
           triggerTvAlert(enrichedMsg);
@@ -79,9 +86,10 @@ export function useRoomRealtime(roomId, options = {}) {
           try {
             const { data: profileData } = await getProfile(newRecord.requester_id);
             const enrichedRequest = { ...newRecord, requester: profileData };
-            setActiveRequests((prev) =>
-              [...prev, enrichedRequest].sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
-            );
+            setActiveRequests((prev) => {
+              if (prev.some((request) => request.id === enrichedRequest.id)) return prev;
+              return [...prev, enrichedRequest].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+            });
           } catch (err) {
             console.error('[useRoomRealtime] Erro ao enriquecer pedido:', err);
           }
@@ -109,12 +117,19 @@ export function useRoomRealtime(roomId, options = {}) {
       unsubscribeFromRoom(channelRef.current);
       channelRef.current = null;
     };
-  }, [roomId, resolveMessageSender, triggerTvAlert, onRoomUpdate, targetArtistId]);
+  }, [appendMessage, roomId, resolveMessageSender, triggerTvAlert, onRoomUpdate, targetArtistId]);
 
   const sendChatMessage = useCallback(async (content) => {
     if (!userId || !roomId) return { error: { message: 'Nao autorizado' } };
-    return sendMessage(roomId, userId, content, 'text');
-  }, [roomId, userId]);
+    const result = await sendMessage(roomId, userId, content, 'text');
+
+    if (!result.error && result.data) {
+      const enrichedMsg = await resolveMessageSender(result.data);
+      appendMessage(enrichedMsg);
+    }
+
+    return result;
+  }, [appendMessage, resolveMessageSender, roomId, userId]);
 
   return { messages, activeRequests, tvAlerts, isConnected, sendChatMessage };
 }

@@ -20,20 +20,23 @@ export async function getWallet(profileId) {
 /**
  * [PRODUÇÃO] Cria uma sessão de checkout no Stripe para adicionar fundos.
  */
-export async function addFundsCheckout(amount, userId) {
+export async function addFundsCheckout(amount, userId, returnTo = '/rooms') {
   const checkoutAmount = Number(amount);
   if (!Number.isFinite(checkoutAmount) || checkoutAmount < 5) {
     throw new Error('Valor mínimo para adicionar créditos é R$ 5,00.');
   }
 
   const { data, error } = await supabase.functions.invoke('create-checkout', {
-    body: { amount: checkoutAmount, userId },
+    body: { amount: checkoutAmount, userId, returnTo },
   });
 
   if (error) throw error;
   if (data?.url) {
     window.location.href = data.url; // Redireciona pro Stripe
+    return;
   }
+
+  throw new Error('Checkout nao retornou uma URL de pagamento.');
 }
 
 export async function confirmCheckoutSession(sessionId) {

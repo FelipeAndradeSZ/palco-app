@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useRoomRealtime } from '../hooks/useRoomRealtime';
 import { useRoomMediaStream } from '../hooks/useRoomMediaStream';
 import { getRoomById, joinRoom, leaveRoom } from '../services/roomService';
@@ -454,6 +454,7 @@ function DesktopLiveRoom({
 export default function RoomPage() {
   const { roomId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { profile } = useAuth();
   const [room, setRoom] = useState(null);
   const [wallet, setWallet] = useState({ balance: 0 });
@@ -462,8 +463,8 @@ export default function RoomPage() {
   const [addingFunds, setAddingFunds] = useState(false);
   const [creditAmount, setCreditAmount] = useState(50);
   const [creditError, setCreditError] = useState(null);
-  const [selectedArtistId, setSelectedArtistId] = useState(null);
-  const [listenEnabled, setListenEnabled] = useState(false);
+  const [selectedArtistId, setSelectedArtistId] = useState(() => searchParams.get('artist'));
+  const [listenEnabled, setListenEnabled] = useState(() => Boolean(searchParams.get('artist')));
   const [activeAction, setActiveAction] = useState('request');
   const [tipAmount, setTipAmount] = useState(10);
   const [tipMessage, setTipMessage] = useState('');
@@ -529,12 +530,14 @@ export default function RoomPage() {
     setSelectedArtistId(artistId);
     setListenEnabled(true);
     setFeedback(null);
+    navigate(`/room/${roomId}?artist=${encodeURIComponent(artistId)}`, { replace: true });
   };
 
   const handleBackToArtists = () => {
     setSelectedArtistId(null);
     setListenEnabled(false);
     setFeedback(null);
+    navigate(`/room/${roomId}`, { replace: true });
   };
 
   const handleAddFunds = async () => {
@@ -547,7 +550,10 @@ export default function RoomPage() {
     setCreditError(null);
     setAddingFunds(true);
     try {
-      await addFundsCheckout(amount, profile.id);
+      const returnTo = selectedArtist?.id
+        ? `/room/${roomId}?artist=${encodeURIComponent(selectedArtist.id)}`
+        : `/room/${roomId}`;
+      await addFundsCheckout(amount, profile.id, returnTo);
     } catch (err) {
       console.error('Erro ao redirecionar para pagamento', err);
       setCreditError(err.message || 'Nao foi possivel iniciar o pagamento.');
@@ -595,10 +601,10 @@ export default function RoomPage() {
 
       setTipMessage('');
       setFeedback({
-        type: 'success',
-        message: result?.data?.fallback
+        type: result?.data?.chat_warning ? 'error' : 'success',
+        message: result?.data?.chat_warning || (result?.data?.fallback
           ? 'Gorjeta apareceu no chat. Aplique a migration para descontar creditos automaticamente.'
-          : 'Gorjeta enviada para o artista.',
+          : 'Gorjeta enviada para o artista.'),
       });
     } catch (err) {
       setFeedback({ type: 'error', message: err.message || 'Nao foi possivel enviar a gorjeta.' });

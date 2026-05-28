@@ -56,7 +56,7 @@ export default function ArtistDashboardPage() {
     if (!activeRoomId) return;
     setIsProcessing(true);
     try {
-      await updateRoomArtist(activeRoomId, null);
+      await updateRoomArtist(activeRoomId, null, profile.id);
       setSelectedRoomId(null);
       await refetchRooms();
     } catch (err) {
@@ -141,14 +141,25 @@ export default function ArtistDashboardPage() {
       {activeRoomId ? (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
           <div className="min-w-0 space-y-6">
-            <div className="flex items-center gap-4 rounded-2xl border border-palco-live/30 bg-palco-live/10 p-4 shadow-[0_0_20px_rgba(220,38,38,0.15)]">
-              <span className="h-3 w-3 rounded-full bg-palco-live" />
-              <div>
-                <p className="font-bold text-palco-live">Voce esta no ar</p>
-                <p className="text-sm text-palco-text-muted">
-                  Camera e microfone estao sendo enviados para ouvintes desta sala.
-                </p>
+            <div className="flex flex-col gap-4 rounded-2xl border border-palco-live/30 bg-palco-live/10 p-4 shadow-[0_0_20px_rgba(220,38,38,0.15)] sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-4">
+                <span className="h-3 w-3 shrink-0 rounded-full bg-palco-live" />
+                <div>
+                  <p className="font-bold text-palco-live">Voce esta no ar</p>
+                  <p className="text-sm text-palco-text-muted">
+                    Camera e microfone estao sendo enviados para ouvintes desta sala.
+                  </p>
+                </div>
               </div>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={handleStopLive}
+                loading={isProcessing}
+                className="w-full sm:w-auto"
+              >
+                Sair da sala
+              </Button>
             </div>
 
             <LocalCamera

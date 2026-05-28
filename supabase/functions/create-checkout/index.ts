@@ -10,6 +10,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+function safeReturnPath(value: unknown) {
+  if (typeof value !== 'string') return '/rooms'
+  if (!value.startsWith('/') || value.startsWith('//')) return '/rooms'
+  return value
+}
+
 serve(async (req) => {
   // CORS Preflight
   if (req.method === 'OPTIONS') {
@@ -17,8 +23,10 @@ serve(async (req) => {
   }
 
   try {
-    const { amount, userId } = await req.json()
+    const { amount, userId, returnTo } = await req.json()
     const checkoutAmount = Number(amount)
+    const returnPath = safeReturnPath(returnTo)
+    const origin = req.headers.get('origin') || Deno.env.get('SITE_URL') || 'http://localhost:5173'
 
     if (!checkoutAmount || !userId) {
       throw new Error('Amount and UserId are required')
@@ -44,12 +52,13 @@ serve(async (req) => {
         },
       ],
       mode: 'payment',
-      success_url: `${req.headers.get('origin')}/wallet/return?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${req.headers.get('origin')}/rooms?checkout=cancel`,
+      success_url: `${origin}/wallet/return?session_id={CHECKOUT_SESSION_ID}&return_to=${encodeURIComponent(returnPath)}`,
+      cancel_url: `${origin}${returnPath}${returnPath.includes('?') ? '&' : '?'}checkout=cancel`,
       client_reference_id: userId,
       metadata: {
         userId: userId,
-        amount: checkoutAmount.toString()
+        amount: checkoutAmount.toString(),
+        returnTo: returnPath
       }
     })
 

@@ -4,12 +4,18 @@ import { confirmCheckoutSession } from '../services/walletService';
 import { useAuth } from '../hooks/useAuth';
 import Spinner from '../components/ui/Spinner';
 
+function safeReturnPath(value) {
+  if (!value || !value.startsWith('/') || value.startsWith('//')) return '/rooms';
+  return value;
+}
+
 export default function WalletReturnPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { refreshProfile } = useAuth();
   const [status, setStatus] = useState('loading');
   const [message, setMessage] = useState('Confirmando pagamento...');
+  const returnTo = safeReturnPath(searchParams.get('return_to'));
 
   useEffect(() => {
     let cancelled = false;
@@ -44,9 +50,9 @@ export default function WalletReturnPage() {
 
   useEffect(() => {
     if (status !== 'success') return undefined;
-    const timeout = setTimeout(() => navigate('/rooms'), 2500);
+    const timeout = setTimeout(() => navigate(returnTo, { replace: true }), 2500);
     return () => clearTimeout(timeout);
-  }, [navigate, status]);
+  }, [navigate, returnTo, status]);
 
   return (
     <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-palco-black px-4">
@@ -70,10 +76,10 @@ export default function WalletReturnPage() {
         </h1>
         <p className="mt-3 text-sm leading-6 text-palco-text-muted">{message}</p>
         <Link
-          to="/rooms"
+          to={returnTo}
           className="mt-6 inline-flex rounded-xl bg-palco-gold px-5 py-3 text-sm font-black text-palco-black no-underline transition hover:bg-palco-gold-light"
         >
-          Voltar para salas
+          Voltar para onde estava
         </Link>
       </div>
     </div>
