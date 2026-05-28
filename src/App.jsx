@@ -21,6 +21,7 @@ import RegisterPage from './pages/RegisterPage';
 import ArtistDashboardPage from './pages/ArtistDashboardPage';
 import TVModePage from './pages/TVModePage';
 import RoomPage from './pages/RoomPage';
+import OnboardingModal from './components/features/auth/OnboardingModal';
 
 export default function App() {
   return (
@@ -94,6 +95,7 @@ export default function App() {
             }
           />
         </Routes>
+        <OnboardingModal />
       </AuthProvider>
     </BrowserRouter>
   );

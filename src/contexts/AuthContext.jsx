@@ -80,7 +80,7 @@ export function AuthProvider({ children }) {
         const pendingRole = localStorage.getItem('@palco/pending_role');
         if (pendingRole) {
           try {
-            await updateProfile(session.user.id, { role: pendingRole });
+            await updateProfile(session.user.id, { role: pendingRole, onboarding_completed: true });
             localStorage.removeItem('@palco/pending_role');
           } catch (err) {
             console.error('[PALCO] Erro ao atualizar pending role', err);
@@ -184,6 +184,7 @@ export function AuthProvider({ children }) {
     signOut: handleSignOut,
     refreshProfile,
     isAuthenticated: !!user,
+    requiresOnboarding: profile ? profile.onboarding_completed === false : false,
     isArtist: profile?.role === 'artist',
     isVenue: profile?.role === 'venue',
     isListener: profile?.role === 'listener',
