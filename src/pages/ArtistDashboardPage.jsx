@@ -168,6 +168,7 @@ export default function ArtistDashboardPage() {
           </div>
         </div>
       ) : (
+        <div>
           <h2 className="font-display font-bold text-xl text-palco-text mb-4">
             Escolha uma sala para tocar
           </h2>
