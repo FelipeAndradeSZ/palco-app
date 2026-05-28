@@ -5,7 +5,7 @@
  * Contém o ChatBox (Realtime) e no futuro o sistema de pedidos.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useRoomRealtime } from '../hooks/useRoomRealtime';
 import { getRoomById, joinRoom, leaveRoom } from '../services/roomService';
@@ -15,13 +15,12 @@ import { useAuth } from '../hooks/useAuth';
 import ChatBox from '../components/features/chat/ChatBox';
 import Spinner from '../components/ui/Spinner';
 import Badge from '../components/ui/Badge';
-import Button from '../components/ui/Button';
 import RequestSongModal from '../components/features/bounty/RequestSongModal';
 
 export default function RoomPage() {
   const { roomId } = useParams();
   const navigate = useNavigate();
-  const { user, profile } = useAuth();
+  const { profile } = useAuth();
   
   const [room, setRoom] = useState(null);
   const [wallet, setWallet] = useState({ balance: 0 });
@@ -29,13 +28,14 @@ export default function RoomPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [addingFunds, setAddingFunds] = useState(false);
   
+  const handleRoomUpdate = useCallback(async () => {
+    const { data: fullRoom } = await getRoomById(roomId);
+    if (fullRoom) setRoom(fullRoom);
+  }, [roomId]);
+
   // Conecta ao WebSocket
   const { messages, isConnected, sendChatMessage } = useRoomRealtime(roomId, {
-    onRoomUpdate: async (updatedRoom) => {
-      // Re-fetch the full room to get the updated nested relations (like current_artist)
-      const { data: fullRoom } = await getRoomById(roomId);
-      if (fullRoom) setRoom(fullRoom);
-    }
+    onRoomUpdate: handleRoomUpdate,
   });
 
   useEffect(() => {

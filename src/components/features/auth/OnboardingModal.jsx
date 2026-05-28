@@ -1,5 +1,5 @@
 import { useState, useContext } from 'react';
-import { AuthContext } from '../../../contexts/AuthContext';
+import { AuthContext } from '../../../contexts/AuthContextObject';
 import { updateProfile } from '../../../services/profileService';
 import { USER_ROLES, USER_ROLE_LABELS, MUSIC_GENRES } from '../../../lib/constants';
 import Button from '../../ui/Button';

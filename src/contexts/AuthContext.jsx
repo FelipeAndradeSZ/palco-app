@@ -11,11 +11,10 @@
  * - error: último erro de auth (null se tudo ok)
  */
 
-import { createContext, useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import * as authService from '../services/authService';
 import { getProfile, updateProfile } from '../services/profileService';
-
-export const AuthContext = createContext(null);
+import { AuthContext } from './AuthContextObject';
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -117,7 +116,7 @@ export function AuthProvider({ children }) {
         return { error: signInError };
       }
       return { error: null };
-    } catch (err) {
+    } catch {
       const message = 'Erro inesperado no login. Tente novamente.';
       setError(message);
       return { error: { message } };
@@ -141,7 +140,7 @@ export function AuthProvider({ children }) {
         return { error: signUpError };
       }
       return { error: null };
-    } catch (err) {
+    } catch {
       const message = 'Erro inesperado no cadastro. Tente novamente.';
       setError(message);
       return { error: { message } };

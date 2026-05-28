@@ -15,6 +15,29 @@ import Badge from '../components/ui/Badge';
 import LiveAlertOverlay from '../components/features/tv/LiveAlertOverlay';
 import { VIBE_LEVEL_LABELS } from '../lib/constants';
 
+const AUDIO_BARS = [
+  { height: 34, duration: 0.9 },
+  { height: 72, duration: 1.1 },
+  { height: 48, duration: 0.8 },
+  { height: 92, duration: 1.2 },
+  { height: 56, duration: 0.95 },
+  { height: 82, duration: 1.05 },
+  { height: 38, duration: 0.85 },
+  { height: 68, duration: 1.18 },
+  { height: 44, duration: 0.92 },
+  { height: 96, duration: 1.15 },
+  { height: 52, duration: 1.0 },
+  { height: 76, duration: 0.88 },
+  { height: 32, duration: 1.08 },
+  { height: 64, duration: 0.98 },
+  { height: 88, duration: 1.22 },
+  { height: 42, duration: 0.9 },
+  { height: 70, duration: 1.12 },
+  { height: 54, duration: 0.86 },
+  { height: 84, duration: 1.2 },
+  { height: 46, duration: 0.94 },
+];
+
 export default function TVModePage() {
   const { profile } = useAuth();
   const { rooms, loading } = useRooms();
@@ -135,14 +158,14 @@ export default function TVModePage() {
 
         {/* Barra de áudio decorativa */}
         <div className="flex items-end gap-1.5 h-12">
-          {[...Array(20)].map((_, i) => (
+          {AUDIO_BARS.map((bar, i) => (
             <div
               key={i}
               className="w-1.5 bg-palco-gold/60 rounded-full animate-pulse"
               style={{
-                height: `${Math.random() * 100}%`,
+                height: `${bar.height}%`,
                 animationDelay: `${i * 0.1}s`,
-                animationDuration: `${0.8 + Math.random() * 0.5}s`,
+                animationDuration: `${bar.duration}s`,
               }}
             />
           ))}

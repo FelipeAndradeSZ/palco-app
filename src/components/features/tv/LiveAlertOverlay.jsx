@@ -5,8 +5,6 @@
  * pop-ups centralizados estilo Twitch para gorjetas e pedidos.
  */
 
-import { useState, useEffect } from 'react';
-
 export default function LiveAlertOverlay({ alerts }) {
   // Exibimos apenas o alerta mais recente da fila no topo para não poluir a TV
   // Como o useRoomRealtime limpa a fila a cada 5s, eles aparecerão sequencialmente.

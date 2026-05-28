@@ -20,7 +20,7 @@ export function useRooms() {
         return;
       }
       setRooms(data || []);
-    } catch (err) {
+    } catch {
       setError('Erro ao carregar salas. Tente novamente.');
     } finally {
       setLoading(false);
@@ -28,7 +28,8 @@ export function useRooms() {
   }, []);
 
   useEffect(() => {
-    fetchRooms();
+    const task = setTimeout(fetchRooms, 0);
+    return () => clearTimeout(task);
   }, [fetchRooms]);
 
   return { rooms, loading, error, refetch: fetchRooms };
