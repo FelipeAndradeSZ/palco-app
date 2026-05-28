@@ -21,8 +21,13 @@ export async function getWallet(profileId) {
  * [PRODUÇÃO] Cria uma sessão de checkout no Stripe para adicionar fundos.
  */
 export async function addFundsCheckout(amount, userId) {
+  const checkoutAmount = Number(amount);
+  if (!Number.isFinite(checkoutAmount) || checkoutAmount < 5) {
+    throw new Error('Valor mínimo para adicionar créditos é R$ 5,00.');
+  }
+
   const { data, error } = await supabase.functions.invoke('create-checkout', {
-    body: { amount, userId },
+    body: { amount: checkoutAmount, userId },
   });
 
   if (error) throw error;

@@ -172,8 +172,8 @@ function HeroMonitor() {
 
 function QrPanel() {
   const qrValue = typeof window !== 'undefined'
-    ? `${window.location.origin}/room/demo-palco`
-    : 'https://palco.app/room/demo-palco';
+    ? `${window.location.origin}/interact/demo-palco?artist=gustavo-martins`
+    : 'https://palco.app/interact/demo-palco?artist=gustavo-martins';
 
   return (
     <aside className="rounded-2xl border border-palco-gold/45 bg-black/55 p-5 shadow-[0_0_34px_rgba(212,168,67,0.12)]">

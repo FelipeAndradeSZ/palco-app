@@ -3,27 +3,206 @@ import { useAuth } from '../hooks/useAuth';
 import { useRooms } from '../hooks/useRooms';
 import { useRoomRealtime } from '../hooks/useRoomRealtime';
 import { updateRoomArtist } from '../services/roomService';
+import { updateProfile, upsertArtistDetails } from '../services/profileService';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import ArtistRequestQueue from '../components/features/bounty/ArtistRequestQueue';
 import ChatBox from '../components/features/chat/ChatBox';
 import LocalCamera from '../components/features/video/LocalCamera';
-import { QUALITY_TIER_LABELS } from '../lib/constants';
+import { MUSIC_GENRES, QUALITY_TIER_LABELS } from '../lib/constants';
+import { getActiveArtists, roomHasArtist } from '../lib/roomArtists';
+
+function ArtistProfileEditor({ profile, artistDetails, onSaved }) {
+  const [form, setForm] = useState({
+    name: profile?.name || '',
+    mainGenre: artistDetails.main_genre || '',
+    bio: artistDetails.bio || '',
+    repertoire: artistDetails.repertoire || '',
+    pixKey: artistDetails.pix_key || '',
+    instagramUrl: artistDetails.instagram_url || '',
+    bookingWhatsapp: artistDetails.booking_whatsapp || '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState(null);
+
+  function updateField(field, value) {
+    setForm((prev) => ({ ...prev, [field]: value }));
+    setFeedback(null);
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    if (!profile?.id) return;
+
+    setSaving(true);
+    setFeedback(null);
+
+    try {
+      const profileResult = await updateProfile(profile.id, {
+        name: form.name.trim() || profile.name,
+      });
+
+      if (profileResult.error) throw profileResult.error;
+
+      const detailsPayload = {
+        main_genre: form.mainGenre || null,
+        bio: form.bio.trim() || null,
+        repertoire: form.repertoire.trim() || null,
+        pix_key: form.pixKey.trim() || null,
+        instagram_url: form.instagramUrl.trim() || null,
+        booking_whatsapp: form.bookingWhatsapp.trim() || null,
+      };
+
+      const detailsResult = await upsertArtistDetails(profile.id, detailsPayload);
+
+      if (detailsResult.error) {
+        const fallbackResult = await upsertArtistDetails(profile.id, {
+          main_genre: detailsPayload.main_genre,
+        });
+        if (fallbackResult.error) throw fallbackResult.error;
+        setFeedback({
+          type: 'warning',
+          message: 'Gênero salvo. Aplique a migration para salvar bio, repertório e contatos.',
+        });
+      } else {
+        setFeedback({ type: 'success', message: 'Perfil atualizado.' });
+      }
+
+      await onSaved();
+    } catch (err) {
+      setFeedback({ type: 'error', message: err.message || 'Não foi possível salvar o perfil.' });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card>
+      <form onSubmit={handleSubmit} className="p-5">
+        <div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+          <div>
+            <h2 className="font-display text-xl font-bold text-palco-text">Perfil do artista</h2>
+            <p className="mt-1 text-sm text-palco-text-muted">
+              Esses dados aparecem para ouvintes, estabelecimentos e contratação.
+            </p>
+          </div>
+          <Button type="submit" size="sm" loading={saving}>
+            Salvar perfil
+          </Button>
+        </div>
+
+        {feedback && (
+          <div className={`mb-4 rounded-xl border px-4 py-3 text-sm ${
+            feedback.type === 'success'
+              ? 'border-palco-success/30 bg-palco-success/10 text-palco-success'
+              : feedback.type === 'warning'
+                ? 'border-palco-warning/30 bg-palco-warning/10 text-palco-warning'
+                : 'border-palco-live/30 bg-palco-live/10 text-palco-live'
+          }`}
+          >
+            {feedback.message}
+          </div>
+        )}
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <label className="block">
+            <span className="mb-2 block text-sm font-medium text-palco-text-muted">Nome artístico</span>
+            <input
+              value={form.name}
+              onChange={(event) => updateField('name', event.target.value)}
+              className="w-full rounded-xl border border-palco-border bg-palco-dark px-4 py-3 text-sm text-palco-text outline-none focus:border-palco-gold"
+              maxLength={150}
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-2 block text-sm font-medium text-palco-text-muted">Gênero principal</span>
+            <select
+              value={form.mainGenre}
+              onChange={(event) => updateField('mainGenre', event.target.value)}
+              className="w-full rounded-xl border border-palco-border bg-palco-dark px-4 py-3 text-sm text-palco-text outline-none focus:border-palco-gold"
+            >
+              <option value="">Selecione</option>
+              {MUSIC_GENRES.map((genre) => (
+                <option key={genre} value={genre}>{genre}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block lg:col-span-2">
+            <span className="mb-2 block text-sm font-medium text-palco-text-muted">Bio curta</span>
+            <textarea
+              value={form.bio}
+              onChange={(event) => updateField('bio', event.target.value)}
+              className="min-h-24 w-full rounded-xl border border-palco-border bg-palco-dark px-4 py-3 text-sm text-palco-text outline-none focus:border-palco-gold"
+              maxLength={500}
+              placeholder="Conte em poucas linhas o estilo do seu show."
+            />
+          </label>
+
+          <label className="block lg:col-span-2">
+            <span className="mb-2 block text-sm font-medium text-palco-text-muted">Repertório base</span>
+            <textarea
+              value={form.repertoire}
+              onChange={(event) => updateField('repertoire', event.target.value)}
+              className="min-h-24 w-full rounded-xl border border-palco-border bg-palco-dark px-4 py-3 text-sm text-palco-text outline-none focus:border-palco-gold"
+              maxLength={1000}
+              placeholder="Ex: sertanejo universitário, moda de viola, clássicos anos 90..."
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-2 block text-sm font-medium text-palco-text-muted">Chave PIX</span>
+            <input
+              value={form.pixKey}
+              onChange={(event) => updateField('pixKey', event.target.value)}
+              className="w-full rounded-xl border border-palco-border bg-palco-dark px-4 py-3 text-sm text-palco-text outline-none focus:border-palco-gold"
+              maxLength={180}
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-2 block text-sm font-medium text-palco-text-muted">WhatsApp para contratação</span>
+            <input
+              value={form.bookingWhatsapp}
+              onChange={(event) => updateField('bookingWhatsapp', event.target.value)}
+              className="w-full rounded-xl border border-palco-border bg-palco-dark px-4 py-3 text-sm text-palco-text outline-none focus:border-palco-gold"
+              maxLength={40}
+            />
+          </label>
+
+          <label className="block lg:col-span-2">
+            <span className="mb-2 block text-sm font-medium text-palco-text-muted">Instagram ou link profissional</span>
+            <input
+              value={form.instagramUrl}
+              onChange={(event) => updateField('instagramUrl', event.target.value)}
+              className="w-full rounded-xl border border-palco-border bg-palco-dark px-4 py-3 text-sm text-palco-text outline-none focus:border-palco-gold"
+              maxLength={220}
+              placeholder="https://instagram.com/seuperfil"
+            />
+          </label>
+        </div>
+      </form>
+    </Card>
+  );
+}
 
 export default function ArtistDashboardPage() {
-  const { profile } = useAuth();
+  const { profile, refreshProfile } = useAuth();
   const { rooms, loading: roomsLoading, refetch: refetchRooms } = useRooms();
   const [selectedRoomId, setSelectedRoomId] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
   const assignedRoomId = useMemo(() => {
     if (!profile?.id) return null;
-    return rooms.find((room) => room.current_artist_id === profile.id)?.id || null;
+    return rooms.find((room) => roomHasArtist(room, profile.id))?.id || null;
   }, [profile, rooms]);
 
   const activeRoomId = selectedRoomId || assignedRoomId;
-  const { activeRequests, messages, isConnected, sendChatMessage } = useRoomRealtime(activeRoomId);
+  const { activeRequests, messages, isConnected, sendChatMessage } = useRoomRealtime(activeRoomId, {
+    targetArtistId: profile?.id || null,
+  });
   const artistDetails = profile?.artist_details?.[0] || profile?.artist_details || {};
   const tierLabel = QUALITY_TIER_LABELS[artistDetails.quality_tier] || 'Bronze';
 
@@ -111,6 +290,15 @@ export default function ArtistDashboardPage() {
         </Card>
       </div>
 
+      <div className="mb-8">
+        <ArtistProfileEditor
+          key={profile?.id}
+          profile={profile}
+          artistDetails={artistDetails}
+          onSaved={refreshProfile}
+        />
+      </div>
+
       {activeRoomId ? (
         <div className="mt-8 flex flex-col gap-6 lg:flex-row">
           <div className="flex flex-1 flex-col gap-6">
@@ -156,22 +344,29 @@ export default function ArtistDashboardPage() {
                   <div className="p-5">
                     <div className="mb-2 flex items-center justify-between gap-3">
                       <h3 className="font-display font-bold text-palco-text">{room.name}</h3>
-                      {room.current_artist_id && room.current_artist_id !== profile?.id && (
-                        <Badge variant="default">Ocupada</Badge>
+                      {getActiveArtists(room).length > 0 && (
+                        <Badge variant="live" pulse>
+                          {getActiveArtists(room).length} ao vivo
+                        </Badge>
                       )}
                     </div>
                     <p className="mb-4 text-sm text-palco-text-subtle">
                       {room.genre} - {room.listener_count || 0} ouvintes
                     </p>
+                    {getActiveArtists(room).length > 0 && (
+                      <p className="mb-4 text-xs text-palco-text-subtle">
+                        Tocando agora: {getActiveArtists(room).map((artist) => artist.name).join(', ')}
+                      </p>
+                    )}
                     <Button
                       variant="secondary"
                       size="sm"
                       className="w-full"
-                      disabled={isProcessing || (room.current_artist_id && room.current_artist_id !== profile?.id)}
+                      disabled={isProcessing || roomHasArtist(room, profile?.id)}
                       loading={isProcessing && !activeRoomId}
                       onClick={() => handleGoLive(room.id)}
                     >
-                      {room.current_artist_id ? 'Sala indisponível' : 'Entrar na sala e tocar'}
+                      {roomHasArtist(room, profile?.id) ? 'Você já está nesta sala' : 'Entrar nesta sala também'}
                     </Button>
                   </div>
                 </Card>

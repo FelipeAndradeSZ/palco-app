@@ -50,3 +50,19 @@ export async function updateArtistDetails(profileId, updates) {
 
   return { data, error };
 }
+
+export async function upsertArtistDetails(profileId, updates) {
+  const { data, error } = await supabase
+    .from('artist_details')
+    .upsert(
+      {
+        profile_id: profileId,
+        ...updates,
+      },
+      { onConflict: 'profile_id' }
+    )
+    .select()
+    .single();
+
+  return { data, error };
+}

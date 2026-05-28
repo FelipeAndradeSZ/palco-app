@@ -21,6 +21,7 @@ import RegisterPage from './pages/RegisterPage';
 import ArtistDashboardPage from './pages/ArtistDashboardPage';
 import TVModePage from './pages/TVModePage';
 import RoomPage from './pages/RoomPage';
+import PublicInteractionPage from './pages/PublicInteractionPage';
 import OnboardingModal from './components/features/auth/OnboardingModal';
 
 export default function App() {
@@ -47,6 +48,7 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          <Route path="/interact/:roomId" element={<PublicInteractionPage />} />
           <Route
             path="/artist"
             element={

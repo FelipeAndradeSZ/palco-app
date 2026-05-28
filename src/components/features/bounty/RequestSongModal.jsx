@@ -9,7 +9,7 @@ import Button from '../../ui/Button';
 import Input from '../../ui/Input';
 import Alert from '../../ui/Alert';
 
-export default function RequestSongModal({ isOpen, onClose, onSubmit, currentBalance }) {
+export default function RequestSongModal({ isOpen, onClose, onSubmit, currentBalance, targetArtistName }) {
   const [songTitle, setSongTitle] = useState('');
   const [bountyValue, setBountyValue] = useState(10);
   const [dedication, setDedication] = useState('');
@@ -70,7 +70,7 @@ export default function RequestSongModal({ isOpen, onClose, onSubmit, currentBal
             Pedir Música
           </h2>
           <p className="text-palco-text-muted text-sm mb-6">
-            Apoie o artista e fure a fila com o seu pedido!
+            Apoie {targetArtistName || 'o artista'} e fure a fila com o seu pedido!
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-5">

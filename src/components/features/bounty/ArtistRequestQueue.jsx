@@ -37,6 +37,11 @@ export default function ArtistRequestQueue({ activeRequests }) {
           <p className="text-sm text-palco-text-muted">
             Pedido por <span className="text-palco-text-subtle font-medium">{requesterName}</span>
           </p>
+          {req.target_artist?.name && (
+            <p className="text-xs text-palco-gold mt-1">
+              Direcionado para {req.target_artist.name}
+            </p>
+          )}
           {req.dedication && (
             <p className="text-sm text-palco-text italic mt-2 border-l-2 border-palco-gold pl-2">
               "{req.dedication}"

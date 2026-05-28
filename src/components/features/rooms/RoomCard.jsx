@@ -1,78 +1,72 @@
-/**
- * RoomCard — Card individual de uma sala de música
- */
-
 import Card from '../../ui/Card';
 import Badge from '../../ui/Badge';
 import { VIBE_LEVEL_LABELS } from '../../../lib/constants';
+import { getActiveArtists } from '../../../lib/roomArtists';
 
 export default function RoomCard({ room, onClick }) {
-  const hasArtist = !!room.current_artist_id;
-  const artistName = room.current_artist?.name;
+  const activeArtists = getActiveArtists(room);
+  const hasArtists = activeArtists.length > 0;
 
   return (
-    <Card
-      hover
-      onClick={onClick}
-      className="cursor-pointer group"
-    >
+    <Card hover onClick={onClick} className="group cursor-pointer">
       <div className="p-5">
-        {/* Header: nome + badge */}
-        <div className="flex items-start justify-between mb-3">
-          <h3 className="font-display font-bold text-lg text-palco-text group-hover:text-palco-gold transition-colors duration-200">
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <h3 className="font-display text-lg font-bold text-palco-text transition-colors duration-200 group-hover:text-palco-gold">
             {room.name}
           </h3>
-          {hasArtist && (
+          {hasArtists && (
             <Badge variant="live" pulse>
-              AO VIVO
+              {activeArtists.length} ao vivo
             </Badge>
           )}
         </div>
 
-        {/* Gênero e vibe */}
-        <div className="flex items-center gap-2 mb-4">
+        <div className="mb-4 flex items-center gap-2">
           <Badge variant="gold">{room.genre}</Badge>
           <span className="text-sm text-palco-text-subtle">
             {VIBE_LEVEL_LABELS[room.vibe_level] || room.vibe_level}
           </span>
         </div>
 
-        {/* Artista atual */}
-        {hasArtist && artistName ? (
-          <div className="flex items-center gap-3 mb-4 p-3 rounded-lg bg-palco-dark/50">
-            <div className="w-10 h-10 rounded-full bg-palco-gold/20 flex items-center justify-center text-palco-gold font-bold text-sm shrink-0">
-              {artistName.charAt(0).toUpperCase()}
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-palco-text truncate">
-                {artistName}
+        {hasArtists ? (
+          <div className="mb-4 space-y-2">
+            {activeArtists.slice(0, 3).map((artist) => (
+              <div key={artist.id} className="flex items-center gap-3 rounded-lg bg-palco-dark/50 p-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-palco-gold/20 text-sm font-bold text-palco-gold">
+                  {artist.name.charAt(0).toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-palco-text">{artist.name}</p>
+                  <p className="text-xs text-palco-text-subtle">
+                    {artist.main_genre || 'Tocando agora'}
+                  </p>
+                </div>
+              </div>
+            ))}
+            {activeArtists.length > 3 && (
+              <p className="px-1 text-xs font-semibold text-palco-gold">
+                +{activeArtists.length - 3} artistas nesta sala
               </p>
-              <p className="text-xs text-palco-text-subtle">
-                Tocando agora
-              </p>
-            </div>
+            )}
           </div>
         ) : (
-          <div className="flex items-center gap-2 mb-4 p-3 rounded-lg bg-palco-dark/50">
-            <div className="w-10 h-10 rounded-full bg-palco-border flex items-center justify-center text-palco-text-subtle text-lg">
-              🎵
+          <div className="mb-4 flex items-center gap-2 rounded-lg bg-palco-dark/50 p-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-palco-border text-lg text-palco-text-subtle">
+              P
             </div>
-            <p className="text-sm text-palco-text-subtle">
-              Aguardando artista...
-            </p>
+            <p className="text-sm text-palco-text-subtle">Aguardando artistas...</p>
           </div>
         )}
 
-        {/* Footer: ouvintes */}
         <div className="flex items-center justify-between text-sm text-palco-text-subtle">
           <div className="flex items-center gap-1.5">
-            <span className="inline-block w-2 h-2 rounded-full bg-palco-success" />
+            <span className="inline-block h-2 w-2 rounded-full bg-palco-success" />
             <span>
               {room.listener_count || 0} {room.listener_count === 1 ? 'ouvinte' : 'ouvintes'}
             </span>
           </div>
-          <span className="text-palco-gold opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-xs font-medium">
-            Entrar →
+          <span className="text-xs font-medium text-palco-gold opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+            Escolher artista
           </span>
         </div>
       </div>

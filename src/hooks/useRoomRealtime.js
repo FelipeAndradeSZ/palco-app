@@ -8,7 +8,7 @@ import { useAuth } from './useAuth';
 export function useRoomRealtime(roomId, options = {}) {
   const { user } = useAuth();
   const userId = user?.id;
-  const { onRoomUpdate } = options;
+  const { onRoomUpdate, targetArtistId = null } = options;
   const [messages, setMessages] = useState([]);
   const [activeRequests, setActiveRequests] = useState([]);
   const [tvAlerts, setTvAlerts] = useState([]);
@@ -43,7 +43,7 @@ export function useRoomRealtime(roomId, options = {}) {
         const { data: recentMessages } = await getRecentMessages(roomId);
         if (isMounted && recentMessages) setMessages(recentMessages);
 
-        const { data: requests } = await getActiveRequests(roomId);
+        const { data: requests } = await getActiveRequests(roomId, targetArtistId);
         if (isMounted && requests) setActiveRequests(requests);
       } catch (err) {
         console.error('[useRoomRealtime] Erro ao hidratar dados iniciais:', err);
@@ -72,6 +72,10 @@ export function useRoomRealtime(roomId, options = {}) {
         if (!isMounted) return;
 
         if (eventType === 'INSERT') {
+          if (targetArtistId && newRecord.target_artist_id && newRecord.target_artist_id !== targetArtistId) {
+            return;
+          }
+
           try {
             const { data: profileData } = await getProfile(newRecord.requester_id);
             const enrichedRequest = { ...newRecord, requester: profileData };
@@ -105,7 +109,7 @@ export function useRoomRealtime(roomId, options = {}) {
       unsubscribeFromRoom(channelRef.current);
       channelRef.current = null;
     };
-  }, [roomId, resolveMessageSender, triggerTvAlert, onRoomUpdate]);
+  }, [roomId, resolveMessageSender, triggerTvAlert, onRoomUpdate, targetArtistId]);
 
   const sendChatMessage = useCallback(async (content) => {
     if (!userId || !roomId) return { error: { message: 'Nao autorizado' } };

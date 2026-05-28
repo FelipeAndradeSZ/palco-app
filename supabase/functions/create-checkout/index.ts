@@ -18,9 +18,14 @@ serve(async (req) => {
 
   try {
     const { amount, userId } = await req.json()
+    const checkoutAmount = Number(amount)
 
-    if (!amount || !userId) {
+    if (!checkoutAmount || !userId) {
       throw new Error('Amount and UserId are required')
+    }
+
+    if (!Number.isFinite(checkoutAmount) || checkoutAmount < 5 || checkoutAmount > 5000) {
+      throw new Error('Amount must be between R$ 5 and R$ 5000')
     }
 
     const session = await stripe.checkout.sessions.create({
@@ -33,7 +38,7 @@ serve(async (req) => {
               name: 'Adicionar Saldo no PALCO',
               description: 'Compre saldo para enviar gorjetas e pedir músicas',
             },
-            unit_amount: amount * 100, // Stripe lida com centavos
+            unit_amount: Math.round(checkoutAmount * 100), // Stripe lida com centavos
           },
           quantity: 1,
         },
@@ -44,7 +49,7 @@ serve(async (req) => {
       client_reference_id: userId,
       metadata: {
         userId: userId,
-        amount: amount.toString()
+        amount: checkoutAmount.toString()
       }
     })
 

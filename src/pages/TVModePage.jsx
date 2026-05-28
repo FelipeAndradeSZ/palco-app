@@ -14,6 +14,7 @@ import { useRoomRealtime } from '../hooks/useRoomRealtime';
 import Badge from '../components/ui/Badge';
 import LiveAlertOverlay from '../components/features/tv/LiveAlertOverlay';
 import { VIBE_LEVEL_LABELS } from '../lib/constants';
+import { getActiveArtists, getArtistInteractionUrl, getPrimaryArtist } from '../lib/roomArtists';
 
 const AUDIO_BARS = [
   { height: 34, duration: 0.9 },
@@ -42,6 +43,7 @@ export default function TVModePage() {
   const { profile } = useAuth();
   const { rooms, loading } = useRooms();
   const [selectedRoom, setSelectedRoom] = useState(null);
+  const [selectedArtistId, setSelectedArtistId] = useState(null);
   const [currentTime, setCurrentTime] = useState(new Date());
 
   // Conecta ao WebSocket da sala quando uma for selecionada
@@ -78,7 +80,10 @@ export default function TVModePage() {
             {rooms.map((room) => (
               <button
                 key={room.id}
-                onClick={() => setSelectedRoom(room)}
+                onClick={() => {
+                  setSelectedRoom(room);
+                  setSelectedArtistId(null);
+                }}
                 className="bg-palco-card border border-palco-border rounded-2xl p-8 text-left hover:border-palco-gold/60 hover:bg-palco-card/80 transition-all duration-300 group cursor-pointer"
               >
                 <h3 className="font-display font-bold text-xl text-palco-text group-hover:text-palco-gold transition-colors mb-2">
@@ -88,8 +93,8 @@ export default function TVModePage() {
                   {room.genre} • {VIBE_LEVEL_LABELS[room.vibe_level]}
                 </p>
                 <div className="flex items-center gap-2">
-                  {room.current_artist_id ? (
-                    <Badge variant="live" pulse>AO VIVO</Badge>
+                  {getActiveArtists(room).length > 0 ? (
+                    <Badge variant="live" pulse>{getActiveArtists(room).length} AO VIVO</Badge>
                   ) : (
                     <Badge variant="default">Aberta</Badge>
                   )}
@@ -106,7 +111,10 @@ export default function TVModePage() {
   }
 
   // Tela do Modo TV com sala selecionada
-  const artistName = selectedRoom.current_artist?.name;
+  const activeArtists = getActiveArtists(selectedRoom);
+  const selectedArtist = getPrimaryArtist(selectedRoom, selectedArtistId);
+  const artistName = selectedArtist?.name;
+  const publicInteractionUrl = `${window.location.origin}${getArtistInteractionUrl(selectedRoom.id, selectedArtist?.id)}`;
 
   return (
     <div className="min-h-screen bg-palco-black flex flex-col relative overflow-hidden">
@@ -137,6 +145,36 @@ export default function TVModePage() {
 
       {/* Conteúdo principal */}
       <main className="relative flex-1 flex flex-col items-center justify-center px-10">
+        {activeArtists.length > 1 && (
+          <div className="absolute left-10 top-8 w-80 rounded-2xl border border-palco-border bg-black/45 p-4">
+            <p className="mb-3 text-xs font-black uppercase tracking-[0.16em] text-palco-gold">
+              Artistas nesta sala
+            </p>
+            <div className="space-y-2">
+              {activeArtists.map((artist) => (
+                <button
+                  key={artist.id}
+                  type="button"
+                  onClick={() => setSelectedArtistId(artist.id)}
+                  className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition ${
+                    selectedArtist?.id === artist.id
+                      ? 'border-palco-gold bg-palco-gold/10'
+                      : 'border-white/10 bg-white/[0.03]'
+                  }`}
+                >
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-palco-gold/20 text-sm font-bold text-palco-gold">
+                    {artist.name.charAt(0).toUpperCase()}
+                  </span>
+                  <span>
+                    <span className="block text-sm font-bold text-palco-text">{artist.name}</span>
+                    <span className="text-xs text-palco-text-subtle">{artist.main_genre || 'Ao vivo'}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Avatar do artista */}
         <div className="w-40 h-40 rounded-full bg-gradient-to-br from-palco-gold/30 to-palco-gold/10 border-2 border-palco-gold/40 flex items-center justify-center mb-8 shadow-2xl shadow-palco-gold/10">
           {artistName ? (
@@ -150,10 +188,10 @@ export default function TVModePage() {
 
         {/* Nome do artista */}
         <h2 className="font-display font-bold text-4xl text-palco-text mb-2">
-          {artistName || 'Aguardando artista...'}
+          {artistName || 'Aguardando artistas...'}
         </h2>
         <p className="text-palco-text-muted text-lg mb-8">
-          {artistName ? 'Tocando agora' : 'A música começa em breve'}
+          {artistName ? `QR direcionado para ${artistName}` : 'A música começa em breve'}
         </p>
 
         {/* Barra de áudio decorativa */}
@@ -179,7 +217,7 @@ export default function TVModePage() {
             Peça sua música!
           </p>
           <p className="text-palco-text-muted text-xs">
-            Escaneie o QR Code ou acesse o app
+            Escaneie para interagir com {artistName || selectedRoom.name}
           </p>
         </div>
         <div className="flex items-center gap-6">
@@ -193,7 +231,7 @@ export default function TVModePage() {
           </div>
           <div className="bg-white p-2 rounded-xl shadow-lg">
             <QRCodeSVG 
-              value={`${window.location.origin}/room/${selectedRoom.id}`}
+              value={publicInteractionUrl}
               size={80}
               bgColor="#ffffff"
               fgColor="#000000"
@@ -206,7 +244,10 @@ export default function TVModePage() {
 
       {/* Botão para voltar ao seletor */}
       <button
-        onClick={() => setSelectedRoom(null)}
+        onClick={() => {
+          setSelectedRoom(null);
+          setSelectedArtistId(null);
+        }}
         className="absolute top-6 right-10 bg-palco-card/80 border border-palco-border rounded-full p-2 text-palco-text-subtle hover:text-palco-text hover:border-palco-gold/50 transition-all opacity-30 hover:opacity-100 cursor-pointer"
         title="Trocar sala"
       >
