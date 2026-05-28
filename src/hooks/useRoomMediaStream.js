@@ -53,6 +53,7 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
   const remoteStreamRef = useRef(null);
   const listenerPeerRef = useRef(null);
   const artistPeersRef = useRef(new Map());
+  const iceQueuesRef = useRef(new Map());
   const listenerIdRef = useRef(null);
   const sessionIdRef = useRef(crypto.randomUUID());
 
@@ -169,6 +170,18 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
         };
 
         await peer.setRemoteDescription(new RTCSessionDescription(payload.offer));
+
+        // Flush queued candidates
+        const queue = iceQueuesRef.current.get(payload.listenerId) || [];
+        for (const cand of queue) {
+          try {
+            await peer.addIceCandidate(new RTCIceCandidate(cand));
+          } catch (err) {
+            console.error('[PALCO media] erro ao esvaziar fila de cand do listener:', err);
+          }
+        }
+        iceQueuesRef.current.delete(payload.listenerId);
+
         const answer = await peer.createAnswer();
         const optimizedAnswer = new RTCSessionDescription({
           type: answer.type,
@@ -266,6 +279,17 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
         try {
           await listenerPeerRef.current?.setRemoteDescription(new RTCSessionDescription(payload.answer));
           setStatus('live');
+
+          // Flush queued candidates
+          const queue = iceQueuesRef.current.get('artist') || [];
+          for (const cand of queue) {
+            try {
+              await listenerPeerRef.current?.addIceCandidate(new RTCIceCandidate(cand));
+            } catch (err) {
+              console.error('[PALCO media] erro ao esvaziar fila de cand do artista:', err);
+            }
+          }
+          iceQueuesRef.current.delete('artist');
         } catch (err) {
           console.error('[PALCO media] erro ao receber resposta:', err);
           setError('Não foi possível receber a transmissão.');
@@ -276,13 +300,29 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
         if (payload.senderSessionId === sessionIdRef.current) return;
         if (payload.artistId !== artistId) return;
 
+        const candidate = payload.candidate;
+
         try {
           if (role === 'listener' && payload.from === 'artist' && payload.listenerId === listenerIdRef.current) {
-            await listenerPeerRef.current?.addIceCandidate(new RTCIceCandidate(payload.candidate));
+            const peer = listenerPeerRef.current;
+            if (peer && peer.remoteDescription) {
+              await peer.addIceCandidate(new RTCIceCandidate(candidate));
+            } else {
+              const queue = iceQueuesRef.current.get('artist') || [];
+              queue.push(candidate);
+              iceQueuesRef.current.set('artist', queue);
+            }
           }
 
           if (role === 'artist' && payload.from === 'listener') {
-            await artistPeersRef.current.get(payload.listenerId)?.addIceCandidate(new RTCIceCandidate(payload.candidate));
+            const peer = artistPeersRef.current.get(payload.listenerId);
+            if (peer && peer.remoteDescription) {
+              await peer.addIceCandidate(new RTCIceCandidate(candidate));
+            } else {
+              const queue = iceQueuesRef.current.get(payload.listenerId) || [];
+              queue.push(candidate);
+              iceQueuesRef.current.set(payload.listenerId, queue);
+            }
           }
         } catch (err) {
           console.error('[PALCO media] erro em ICE candidate:', err);
@@ -320,6 +360,7 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
       closeAllPeers();
       stopLocalStream();
       clearRemoteStream();
+      iceQueuesRef.current.clear();
       supabase.removeChannel(channel);
       channelRef.current = null;
     };
