@@ -45,6 +45,13 @@ export function useRoomRealtime(roomId, options = {}) {
   }, []);
 
   useEffect(() => {
+    setMessages([]);
+    setActiveRequests([]);
+    setTvAlerts([]);
+    setVotes({ voice: 0, repertoire: 0, presence: 0 });
+    setUserVotes([]);
+    setIsConnected(false);
+
     if (!roomId) return undefined;
     let isMounted = true;
 

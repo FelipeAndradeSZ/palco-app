@@ -557,6 +557,10 @@ export default function RoomPage() {
     let isMounted = true;
 
     async function setupRoom() {
+      if (isMounted) {
+        setRoom(null);
+        setLoading(true);
+      }
       const { data: roomData, error: roomError } = await getRoomById(roomId);
       if (roomError || !roomData) {
         navigate('/rooms');
