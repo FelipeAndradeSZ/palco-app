@@ -1,9 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import Stripe from 'https://esm.sh/stripe@14.17.0'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') as string, {
   apiVersion: '2023-10-16',
 })
+
+const supabaseUrl = Deno.env.get('SUPABASE_URL') as string
+const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') as string
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -23,6 +27,16 @@ serve(async (req) => {
   }
 
   try {
+    // SEGURANÇA: Verificar autenticação JWT
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) throw new Error('Usuário não autenticado')
+
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    })
+    const { data: authData, error: authError } = await supabase.auth.getUser()
+    if (authError || !authData.user) throw new Error('Usuário não autenticado')
+
     const { amount, userId, returnTo } = await req.json()
     const checkoutAmount = Number(amount)
     const returnPath = safeReturnPath(returnTo)
@@ -30,6 +44,11 @@ serve(async (req) => {
 
     if (!checkoutAmount || !userId) {
       throw new Error('Amount and UserId are required')
+    }
+
+    // SEGURANÇA: O userId do body deve ser do próprio usuário autenticado
+    if (userId !== authData.user.id) {
+      throw new Error('Não é permitido criar recarga para outro usuário')
     }
 
     if (!Number.isFinite(checkoutAmount) || checkoutAmount < 5 || checkoutAmount > 5000) {

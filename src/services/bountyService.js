@@ -145,17 +145,17 @@ export async function sendTip(roomId, amount, message, targetArtistId = null) {
     return rpcResult;
   }
 
-  const messageResult = await sendMessage(roomId, user.id, content, 'tip_alert');
-  if (messageResult.error) return messageResult;
-
+  // SEGURANÇA: O RPC send_artist_tip não existe ou falhou por schema.
+  // NÃO podemos enviar a gorjeta como mensagem no chat sem debitar a carteira,
+  // pois isso permitiria gorjetas gratuitas (dinheiro fantasma).
+  // Retornamos erro explícito para o frontend informar o usuário.
+  console.error('[PALCO bountyService] send_artist_tip RPC indisponível:', rpcResult.error);
   return {
-    data: {
-      fallback: true,
-      amount: tipAmount,
-      room_id: roomId,
-      target_artist_id: targetArtistId,
+    data: null,
+    error: {
+      message: 'O sistema de gorjetas está temporariamente indisponível. Tente novamente em instantes.',
+      code: 'TIP_RPC_UNAVAILABLE',
     },
-    error: null,
   };
 }
 

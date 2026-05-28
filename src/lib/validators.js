@@ -20,11 +20,11 @@ import { BUSINESS_RULES } from './constants';
 export function sanitizeText(input) {
   if (typeof input !== 'string') return '';
   return input
-    .replace(/<[^>]*>/g, '') // Remove tags HTML
-    .replace(/&lt;/g, '<')   // Decode entities comuns
+    .replace(/&lt;/g, '<')   // Decode entities comuns PRIMEIRO
     .replace(/&gt;/g, '>')
     .replace(/&amp;/g, '&')
     .replace(/&quot;/g, '"')
+    .replace(/<[^>]*>/g, '') // DEPOIS remove todas as tags HTML (incluindo as decodificadas)
     .trim();
 }
 

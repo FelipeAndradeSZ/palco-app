@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { updateProfile, upsertArtistDetails } from '../services/profileService';
 import Card from '../components/ui/Card';
@@ -20,6 +20,21 @@ export default function ProfilePage() {
   });
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState(null);
+
+  // Re-sincroniza o formulário quando o perfil carrega do servidor
+  useEffect(() => {
+    if (!profile) return;
+    const details = profile.artist_details?.[0] || profile.artist_details || {};
+    setForm({
+      name: profile.name || '',
+      mainGenre: details.main_genre || '',
+      bio: details.bio || '',
+      repertoire: details.repertoire || '',
+      pixKey: details.pix_key || '',
+      instagramUrl: details.instagram_url || '',
+      bookingWhatsapp: details.booking_whatsapp || '',
+    });
+  }, [profile]);
 
   const isArtist = profile?.role === 'artist';
 
