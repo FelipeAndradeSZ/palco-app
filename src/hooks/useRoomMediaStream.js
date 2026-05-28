@@ -24,16 +24,21 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
   const [error, setError] = useState(null);
   const channelRef = useRef(null);
   const localStreamRef = useRef(null);
+  const remoteStreamRef = useRef(null);
   const listenerPeerRef = useRef(null);
   const artistPeersRef = useRef(new Map());
   const listenerIdRef = useRef(null);
+  const sessionIdRef = useRef(crypto.randomUUID());
 
   const sendSignal = useCallback(async (event, payload) => {
     if (!channelRef.current) return;
     await channelRef.current.send({
       type: 'broadcast',
       event,
-      payload,
+      payload: {
+        ...payload,
+        senderSessionId: sessionIdRef.current,
+      },
     });
   }, []);
 
@@ -47,6 +52,21 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
     artistPeersRef.current.clear();
   }, []);
 
+  const stopLocalStream = useCallback(() => {
+    if (!localStreamRef.current) return;
+    localStreamRef.current.getTracks().forEach((track) => track.stop());
+    localStreamRef.current = null;
+    setLocalStream(null);
+  }, []);
+
+  const clearRemoteStream = useCallback(() => {
+    if (remoteStreamRef.current) {
+      remoteStreamRef.current.getTracks().forEach((track) => track.stop());
+      remoteStreamRef.current = null;
+    }
+    setRemoteStream(null);
+  }, []);
+
   useEffect(() => {
     if (!enabled || !roomId || !artistId || !role) {
       return undefined;
@@ -56,6 +76,10 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
     const channel = supabase.channel(`media:${roomId}:${artistId}`);
     channelRef.current = channel;
 
+    if (role === 'listener') {
+      stopLocalStream();
+    }
+
     Promise.resolve().then(() => {
       if (!cancelled) {
         setStatus('connecting');
@@ -64,6 +88,10 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
     });
 
     async function ensureArtistMedia() {
+      if (role !== 'artist') {
+        throw new Error('Apenas artistas podem publicar camera e microfone.');
+      }
+
       if (localStreamRef.current) return localStreamRef.current;
 
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -84,6 +112,7 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
     }
 
     async function answerListenerOffer(payload) {
+      if (payload.senderSessionId === sessionIdRef.current) return;
       if (role !== 'artist' || payload.artistId !== artistId) return;
 
       try {
@@ -106,6 +135,7 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
         peer.onconnectionstatechange = () => {
           if (peer.connectionState === 'connected') setStatus('live');
           if (peer.connectionState === 'failed' || peer.connectionState === 'disconnected') {
+            peer.close();
             artistPeersRef.current.delete(payload.listenerId);
           }
         };
@@ -137,7 +167,11 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
       peer.addTransceiver('video', { direction: 'recvonly' });
 
       peer.ontrack = (event) => {
-        const incomingStream = event.streams[0] || new MediaStream([event.track]);
+        const incomingStream = event.streams[0] || remoteStreamRef.current || new MediaStream();
+        if (!event.streams[0] && !incomingStream.getTracks().some((track) => track.id === event.track.id)) {
+          incomingStream.addTrack(event.track);
+        }
+        remoteStreamRef.current = incomingStream;
         setRemoteStream(incomingStream);
       };
 
@@ -161,6 +195,12 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
 
       const offer = await peer.createOffer();
       await peer.setLocalDescription(offer);
+
+      peer.getSenders().forEach((sender) => {
+        if (sender.track) sender.track.stop();
+        sender.replaceTrack(null).catch(() => {});
+      });
+
       await sendSignal('listener-offer', {
         artistId,
         listenerId: listenerIdRef.current,
@@ -171,9 +211,11 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
 
     channel
       .on('broadcast', { event: 'listener-offer' }, ({ payload }) => {
+        if (payload.senderSessionId === sessionIdRef.current) return;
         answerListenerOffer(payload);
       })
       .on('broadcast', { event: 'artist-answer' }, async ({ payload }) => {
+        if (payload.senderSessionId === sessionIdRef.current) return;
         if (role !== 'listener') return;
         if (payload.artistId !== artistId || payload.listenerId !== listenerIdRef.current) return;
         try {
@@ -186,6 +228,7 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
         }
       })
       .on('broadcast', { event: 'ice-candidate' }, async ({ payload }) => {
+        if (payload.senderSessionId === sessionIdRef.current) return;
         if (payload.artistId !== artistId) return;
 
         try {
@@ -224,14 +267,12 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
     return () => {
       cancelled = true;
       closeAllPeers();
-      if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach((track) => track.stop());
-        localStreamRef.current = null;
-      }
+      stopLocalStream();
+      clearRemoteStream();
       supabase.removeChannel(channel);
       channelRef.current = null;
     };
-  }, [artistId, closeAllPeers, enabled, role, roomId, sendSignal]);
+  }, [artistId, clearRemoteStream, closeAllPeers, enabled, role, roomId, sendSignal, stopLocalStream]);
 
   return {
     localStream,

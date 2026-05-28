@@ -8,8 +8,8 @@ export default function LocalCamera({ isActive, stream, status, error, artistNam
       stream={stream}
       status={status}
       error={error}
-      title={artistName || 'Sua transmissão'}
-      subtitle="Câmera e microfone enviados para os ouvintes desta sala."
+      title={artistName || 'Sua transmissao'}
+      subtitle="Camera e microfone enviados aos ouvintes. Use fone ou mantenha longe de caixas para evitar eco."
       initial={(artistName || 'P').charAt(0).toUpperCase()}
       muted
       mirrored
