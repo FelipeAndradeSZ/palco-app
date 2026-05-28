@@ -58,6 +58,22 @@ export function subscribeToRoom(roomId, { onNewMessage, onSongRequestUpdate }) {
     }
   );
 
+  // 3. Escutar Alterações na própria Sala (Artistas entrando/saindo, listener count)
+  channel.on(
+    'postgres_changes',
+    {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'rooms',
+      filter: `id=eq.${roomId}`,
+    },
+    (payload) => {
+      if (callbacks.onRoomUpdate) {
+        callbacks.onRoomUpdate(payload.new);
+      }
+    }
+  );
+
   // Inicia a inscrição
   channel.subscribe((status) => {
     if (status === 'SUBSCRIBED') {

@@ -12,7 +12,7 @@ import { getActiveRequests } from '../services/bountyService';
 import { getProfile } from '../services/profileService';
 import { useAuth } from './useAuth';
 
-export function useRoomRealtime(roomId) {
+export function useRoomRealtime(roomId, options = {}) {
   const { user } = useAuth();
   const [messages, setMessages] = useState([]);
   const [activeRequests, setActiveRequests] = useState([]);
@@ -92,6 +92,12 @@ export function useRoomRealtime(roomId) {
         }
         else if (eventType === 'DELETE') {
           setActiveRequests((prev) => prev.filter(req => req.id !== oldRecord.id));
+        }
+      },
+      onRoomUpdate: (updatedRoom) => {
+        if (!isMounted) return;
+        if (options.onRoomUpdate) {
+          options.onRoomUpdate(updatedRoom);
         }
       }
     });

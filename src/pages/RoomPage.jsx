@@ -30,7 +30,13 @@ export default function RoomPage() {
   const [addingFunds, setAddingFunds] = useState(false);
   
   // Conecta ao WebSocket
-  const { messages, isConnected, sendChatMessage } = useRoomRealtime(roomId);
+  const { messages, isConnected, sendChatMessage } = useRoomRealtime(roomId, {
+    onRoomUpdate: async (updatedRoom) => {
+      // Re-fetch the full room to get the updated nested relations (like current_artist)
+      const { data: fullRoom } = await getRoomById(roomId);
+      if (fullRoom) setRoom(fullRoom);
+    }
+  });
 
   useEffect(() => {
     let isMounted = true;

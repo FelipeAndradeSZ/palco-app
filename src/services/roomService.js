@@ -81,5 +81,6 @@ export async function updateRoomArtist(roomId, artistId) {
     .select()
     .single();
 
+  if (error) throw error;
   return { data, error };
 }
