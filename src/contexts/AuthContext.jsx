@@ -13,7 +13,7 @@
 
 import { createContext, useState, useEffect, useCallback } from 'react';
 import * as authService from '../services/authService';
-import { getProfile } from '../services/profileService';
+import { getProfile, updateProfile } from '../services/profileService';
 
 export const AuthContext = createContext(null);
 
@@ -75,6 +75,18 @@ export function AuthProvider({ children }) {
       if (event === 'SIGNED_IN' && session?.user) {
         setUser(session.user);
         setError(null);
+
+        // Verifica se veio de um fluxo OAuth com role pendente
+        const pendingRole = localStorage.getItem('@palco/pending_role');
+        if (pendingRole) {
+          try {
+            await updateProfile(session.user.id, { role: pendingRole });
+            localStorage.removeItem('@palco/pending_role');
+          } catch (err) {
+            console.error('[PALCO] Erro ao atualizar pending role', err);
+          }
+        }
+
         await loadProfile(session.user.id);
       } else if (event === 'SIGNED_OUT') {
         setUser(null);

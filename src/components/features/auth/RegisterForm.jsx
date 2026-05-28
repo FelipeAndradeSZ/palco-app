@@ -63,6 +63,10 @@ export default function RegisterForm({ onSubmit, loading, error }) {
   }
 
   const handleOAuth = async (provider) => {
+    // Salva a role selecionada (se houver) para resgatar na volta do OAuth
+    if (form.role) {
+      localStorage.setItem('@palco/pending_role', form.role);
+    }
     const { error } = await signInWithOAuth(provider);
     if (error) console.error('OAuth Error:', error);
   };
@@ -153,13 +157,13 @@ export default function RegisterForm({ onSubmit, loading, error }) {
         <label className="block text-sm font-medium text-palco-text-muted mb-2">
           Eu sou
         </label>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 gap-2">
           {Object.entries(USER_ROLE_LABELS).map(([value, label]) => (
             <button
               key={value}
               type="button"
               onClick={() => updateField('role', value)}
-              className={`py-3 px-4 rounded-xl border text-sm font-medium transition-all duration-200 cursor-pointer ${
+              className={`py-2 px-1 rounded-xl border text-xs sm:text-sm font-medium transition-all duration-200 cursor-pointer ${
                 form.role === value
                   ? 'border-palco-gold bg-palco-gold/10 text-palco-gold'
                   : 'border-palco-border bg-palco-dark text-palco-text-muted hover:border-palco-text-subtle'
