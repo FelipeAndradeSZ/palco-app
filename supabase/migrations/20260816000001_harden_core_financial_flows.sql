@@ -140,6 +140,15 @@ begin
     raise exception 'Tipo de mensagem invalido';
   end if;
 
+  if (
+    select count(*)
+    from public.chat_messages
+    where sender_id = auth.uid()
+      and created_at >= now() - interval '10 seconds'
+  ) >= 8 then
+    raise exception 'Muitas mensagens em pouco tempo. Aguarde alguns segundos';
+  end if;
+
   if new.message_type <> 'text' then
     new.message_type := 'text';
   end if;
@@ -147,6 +156,9 @@ begin
   return new;
 end;
 $$;
+
+create index if not exists chat_messages_sender_created_idx
+  on public.chat_messages(sender_id, created_at desc);
 
 drop trigger if exists tr_validate_chat_message on public.chat_messages;
 create trigger tr_validate_chat_message
@@ -237,6 +249,15 @@ begin
 
     if length(coalesce(new.message, '')) > 1000 then
       raise exception 'Mensagem de contratacao muito longa';
+    end if;
+
+    if exists (
+      select 1 from public.booking_requests
+      where venue_id = auth.uid()
+        and artist_id = new.artist_id
+        and status = 'pending'
+    ) then
+      raise exception 'Ja existe uma solicitacao pendente para este artista';
     end if;
 
     return new;
@@ -556,9 +577,15 @@ begin
     raise exception 'Pedido indisponivel para cancelamento';
   end if;
 
-  if auth.uid() is distinct from v_request.requester_id
-     and auth.uid() is distinct from v_request.target_artist_id
-     and auth.uid() is distinct from v_request.accepted_by then
+  if v_request.status = 'pending'
+     and auth.uid() is distinct from v_request.requester_id
+     and auth.uid() is distinct from v_request.target_artist_id then
+    raise exception 'Voce nao pode cancelar este pedido';
+  end if;
+
+  if v_request.status in ('accepted', 'playing')
+     and auth.uid() is distinct from v_request.accepted_by
+     and not public.is_platform_admin() then
     raise exception 'Voce nao pode cancelar este pedido';
   end if;
 
@@ -803,6 +830,96 @@ $$;
 revoke execute on function public.simulate_approve_withdrawal(uuid) from anon, authenticated;
 revoke execute on function public.simulate_reject_withdrawal(uuid, text) from anon, authenticated;
 
+create or replace function public.create_battle(
+  p_room_id uuid,
+  p_challenger_artist_id uuid,
+  p_opponent_artist_id uuid,
+  p_song_title text,
+  p_bounty_value numeric default 0
+)
+returns public.battles
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_battle public.battles;
+  v_source text;
+  v_bounty numeric(10,2);
+  v_role text;
+begin
+  if auth.uid() is null then
+    raise exception 'Usuario nao autenticado';
+  end if;
+
+  select role::text into v_role from public.profiles where id = auth.uid();
+  v_source := case
+    when auth.uid() = p_challenger_artist_id and v_role = 'artist' then 'artist'
+    else 'listener'
+  end;
+  v_bounty := coalesce(p_bounty_value, 0);
+
+  if p_challenger_artist_id is null
+     or p_opponent_artist_id is null
+     or p_challenger_artist_id = p_opponent_artist_id then
+    raise exception 'Escolha dois artistas diferentes para a batalha';
+  end if;
+
+  if nullif(trim(p_song_title), '') is null or length(trim(p_song_title)) > 160 then
+    raise exception 'Informe uma musica valida para a batalha';
+  end if;
+
+  if v_bounty < 0 or v_bounty > 500 then
+    raise exception 'Valor da batalha deve ficar entre R$ 0,00 e R$ 500,00';
+  end if;
+
+  if v_source = 'listener' and v_bounty < 5 then
+    raise exception 'Batalha pedida pelo publico deve ter valor minimo de R$ 5,00';
+  end if;
+
+  if not exists (
+    select 1 from public.room_artists
+    where room_id = p_room_id
+      and artist_id in (p_challenger_artist_id, p_opponent_artist_id)
+      and status = 'live'
+    group by room_id
+    having count(distinct artist_id) = 2
+  ) then
+    raise exception 'Os dois artistas precisam estar ao vivo na sala';
+  end if;
+
+  if exists (
+    select 1 from public.battles
+    where room_id = p_room_id
+      and status in ('pending', 'active', 'voting')
+      and challenger_artist_id in (p_challenger_artist_id, p_opponent_artist_id)
+      and opponent_artist_id in (p_challenger_artist_id, p_opponent_artist_id)
+  ) then
+    raise exception 'Ja existe uma batalha ativa entre estes artistas';
+  end if;
+
+  if v_bounty > 0 then
+    update public.wallets
+      set balance = balance - v_bounty
+      where profile_id = auth.uid() and balance >= v_bounty;
+
+    if not found then
+      raise exception 'Saldo insuficiente para iniciar a batalha';
+    end if;
+  end if;
+
+  insert into public.battles (
+    room_id, requester_id, challenger_artist_id, opponent_artist_id,
+    song_title, source, bounty_value, bounty_paid, status
+  ) values (
+    p_room_id, auth.uid(), p_challenger_artist_id, p_opponent_artist_id,
+    trim(p_song_title), v_source, v_bounty, v_bounty > 0, 'pending'
+  ) returning * into v_battle;
+
+  return v_battle;
+end;
+$$;
+
 create or replace function public.accept_battle(p_battle_id uuid)
 returns public.battles
 language plpgsql
@@ -889,6 +1006,13 @@ begin
     raise exception 'Participantes da batalha nao podem votar';
   end if;
 
+  if not exists (
+    select 1 from public.room_participants
+    where room_id = v_battle.room_id and profile_id = auth.uid()
+  ) then
+    raise exception 'Entre na sala para votar nesta batalha';
+  end if;
+
   update public.battle_votes
     set artist_id = p_artist_id,
         room_id = v_battle.room_id,
@@ -934,6 +1058,11 @@ begin
 
   if not found then
     raise exception 'Batalha indisponivel para encerramento';
+  end if;
+
+  if v_battle.voting_started_at is null
+     or now() < v_battle.voting_started_at + interval '30 seconds' then
+    raise exception 'A votacao precisa ficar aberta por pelo menos 30 segundos';
   end if;
 
   select count(*) filter (where artist_id = v_battle.challenger_artist_id),
@@ -994,6 +1123,57 @@ begin
 end;
 $$;
 
+create or replace function public.cancel_battle(p_battle_id uuid)
+returns public.battles
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_battle public.battles;
+begin
+  select * into v_battle
+  from public.battles
+  where id = p_battle_id and status in ('pending', 'active', 'voting')
+  for update;
+
+  if not found then
+    raise exception 'Batalha nao encontrada ou ja encerrada';
+  end if;
+
+  if not public.is_platform_admin()
+     and not (
+       v_battle.status = 'pending'
+       and auth.uid() in (
+         v_battle.requester_id,
+         v_battle.challenger_artist_id,
+         v_battle.opponent_artist_id
+       )
+     ) then
+    raise exception 'Uma batalha iniciada so pode ser cancelada pela administracao';
+  end if;
+
+  if v_battle.bounty_paid and v_battle.bounty_value > 0 and v_battle.requester_id is not null then
+    update public.wallets
+      set balance = balance + v_battle.bounty_value
+      where profile_id = v_battle.requester_id;
+
+    insert into public.battle_settlements (
+      battle_id, payer_id, winner_id, gross_amount, platform_fee, net_amount, status
+    ) values (
+      v_battle.id, v_battle.requester_id, null, v_battle.bounty_value, 0, v_battle.bounty_value, 'refunded'
+    ) on conflict (battle_id) do nothing;
+  end if;
+
+  update public.battles
+    set status = 'cancelled', bounty_paid = false, updated_at = now(), finished_at = now()
+    where id = p_battle_id
+    returning * into v_battle;
+
+  return v_battle;
+end;
+$$;
+
 grant execute on function public.process_song_request(uuid, uuid) to authenticated;
 grant execute on function public.complete_song_request(uuid) to authenticated;
 grant execute on function public.cancel_song_request(uuid) to authenticated;
@@ -1001,10 +1181,12 @@ grant execute on function public.send_artist_tip(uuid, uuid, numeric, text) to a
 grant execute on function public.request_withdrawal(numeric, text) to authenticated;
 grant execute on function public.complete_manual_withdrawal(uuid) to authenticated;
 grant execute on function public.reject_withdrawal(uuid, text) to authenticated;
+grant execute on function public.create_battle(uuid, uuid, uuid, text, numeric) to authenticated;
 grant execute on function public.accept_battle(uuid) to authenticated;
 grant execute on function public.start_battle_voting(uuid) to authenticated;
 grant execute on function public.vote_battle(uuid, uuid, text) to authenticated;
 grant execute on function public.finish_battle(uuid, uuid) to authenticated;
+grant execute on function public.cancel_battle(uuid) to authenticated;
 grant execute on function public.set_artist_live_state(uuid, boolean) to authenticated;
 
 notify pgrst, 'reload schema';

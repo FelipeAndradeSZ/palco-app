@@ -90,7 +90,7 @@ function ArtistBattleControls({ battles, profileId, onChanged }) {
                       Encerrar
                     </Button>
                   )}
-                  {battle.status !== 'finished' && (
+                  {battle.status === 'pending' && (
                     <Button
                       size="sm"
                       variant="ghost"
