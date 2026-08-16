@@ -23,18 +23,24 @@ import { getBookingRequests, updateBookingStatus } from '../services/venueServic
 
 function ArtistBattleControls({ battles, profileId, onChanged }) {
   const [processingId, setProcessingId] = useState(null);
+  const [feedback, setFeedback] = useState(null);
   const artistBattles = battles.filter((battle) =>
     [battle.challenger_artist_id, battle.opponent_artist_id].includes(profileId)
   );
 
-  async function runAction(battleId, action) {
+  async function runAction(battleId, action, successMessage) {
     setProcessingId(battleId);
+    setFeedback(null);
     try {
       const { error } = await action(battleId);
       if (error) throw error;
+      setFeedback({ type: 'success', message: successMessage });
       if (onChanged) await onChanged();
     } catch (err) {
-      console.error('Erro ao atualizar batalha:', err);
+      setFeedback({
+        type: 'error',
+        message: err.message || 'Nao foi possivel atualizar a batalha.',
+      });
     } finally {
       setProcessingId(null);
     }
@@ -45,6 +51,11 @@ function ArtistBattleControls({ battles, profileId, onChanged }) {
   return (
     <section className="rounded-2xl border border-palco-gold/25 bg-palco-gold/10 p-4">
       <h3 className="font-display text-lg font-black text-palco-gold">Batalhas musicais</h3>
+      {feedback && (
+        <div className="mt-3">
+          <Alert type={feedback.type} message={feedback.message} onClose={() => setFeedback(null)} />
+        </div>
+      )}
       <div className="mt-3 space-y-3">
         {artistBattles.map((battle) => {
           const rival = battle.challenger_artist_id === profileId
@@ -64,7 +75,7 @@ function ArtistBattleControls({ battles, profileId, onChanged }) {
                   {battle.status === 'pending' && battle.opponent_artist_id === profileId && (
                     <Button
                       size="sm"
-                      onClick={() => runAction(battle.id, acceptBattle)}
+                      onClick={() => runAction(battle.id, acceptBattle, 'Batalha aceita.')}
                       loading={processingId === battle.id}
                     >
                       Aceitar
@@ -74,17 +85,17 @@ function ArtistBattleControls({ battles, profileId, onChanged }) {
                     <Button
                       size="sm"
                       variant="secondary"
-                      onClick={() => runAction(battle.id, startBattleVoting)}
+                      onClick={() => runAction(battle.id, startBattleVoting, 'Votacao aberta por 30 segundos.')}
                       loading={processingId === battle.id}
                     >
                       Abrir votacao
                     </Button>
                   )}
-                  {(battle.status === 'active' || battle.status === 'voting') && (
+                  {battle.status === 'voting' && (
                     <Button
                       size="sm"
                       variant="primary"
-                      onClick={() => runAction(battle.id, finishBattle)}
+                      onClick={() => runAction(battle.id, finishBattle, 'Batalha encerrada e premio processado.')}
                       loading={processingId === battle.id}
                     >
                       Encerrar
@@ -94,7 +105,7 @@ function ArtistBattleControls({ battles, profileId, onChanged }) {
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => runAction(battle.id, cancelBattle)}
+                      onClick={() => runAction(battle.id, cancelBattle, 'Batalha cancelada.')}
                       loading={processingId === battle.id}
                     >
                       Cancelar

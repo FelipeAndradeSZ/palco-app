@@ -34,6 +34,8 @@ export default function AdminCuratorPage() {
   const [processingId, setProcessingId] = useState(null);
   const [feedback, setFeedback] = useState(null);
   const [serverAdmin, setServerAdmin] = useState(false);
+  const [withdrawalDialog, setWithdrawalDialog] = useState(null);
+  const [rejectionReason, setRejectionReason] = useState('');
 
   const clientAdmin = isAdminUser(user);
   const canOpenAdmin = clientAdmin || serverAdmin;
@@ -109,32 +111,33 @@ export default function AdminCuratorPage() {
     }
   }
 
-  async function handleWithdrawal(request, action) {
-    const reason = action === 'reject'
-      ? window.prompt('Motivo da recusa do saque:', 'Dados PIX invalidos')
-      : null;
-
-    if (action === 'reject' && reason === null) return;
-
+  async function handleWithdrawal(request, action, reason = '') {
     setProcessingId(request.id);
     setFeedback(null);
 
     try {
       const result = action === 'approve'
         ? await approveWithdrawal(request.id)
-        : await rejectWithdrawal(request.id, reason);
+        : await rejectWithdrawal(request.id, reason.trim());
 
       if (result.error) throw result.error;
       setFeedback({
         type: 'success',
         message: action === 'approve' ? 'PIX confirmado como pago.' : 'Saque recusado e saldo devolvido ao artista.',
       });
+      setWithdrawalDialog(null);
+      setRejectionReason('');
       await loadAdminData();
     } catch (err) {
       setFeedback({ type: 'error', message: err.message || 'Nao foi possivel processar o saque.' });
     } finally {
       setProcessingId(null);
     }
+  }
+
+  function openWithdrawalDialog(request, action) {
+    setWithdrawalDialog({ request, action });
+    setRejectionReason('');
   }
 
   if (!canOpenAdmin && !loading) {
@@ -297,14 +300,14 @@ export default function AdminCuratorPage() {
                         size="sm"
                         variant="secondary"
                         loading={processingId === request.id}
-                        onClick={() => handleWithdrawal(request, 'reject')}
+                        onClick={() => openWithdrawalDialog(request, 'reject')}
                       >
                         Recusar
                       </Button>
                       <Button
                         size="sm"
                         loading={processingId === request.id}
-                        onClick={() => handleWithdrawal(request, 'approve')}
+                        onClick={() => openWithdrawalDialog(request, 'approve')}
                       >
                         Confirmar PIX pago
                       </Button>
@@ -340,6 +343,72 @@ export default function AdminCuratorPage() {
             </div>
           </Card>
         </section>
+      )}
+
+      {withdrawalDialog && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="withdrawal-dialog-title"
+        >
+          <Card className="w-full max-w-md">
+            <div className="p-6">
+              <Badge variant={withdrawalDialog.action === 'approve' ? 'success' : 'live'}>
+                {withdrawalDialog.action === 'approve' ? 'Confirmar pagamento' : 'Recusar saque'}
+              </Badge>
+              <h2 id="withdrawal-dialog-title" className="mt-4 font-display text-2xl font-black text-palco-text">
+                R$ {Number(withdrawalDialog.request.amount).toFixed(2)} via PIX
+              </h2>
+              <p className="mt-2 break-all text-sm leading-6 text-palco-text-muted">
+                {withdrawalDialog.request.profile?.name || 'Artista'} - {withdrawalDialog.request.pix_key}
+              </p>
+
+              {withdrawalDialog.action === 'approve' ? (
+                <p className="mt-5 rounded-lg border border-palco-gold/30 bg-palco-gold/10 p-3 text-sm leading-6 text-palco-text-muted">
+                  Confirme somente depois de realizar o PIX fora do PALCO. Esta acao marca o saque como concluido e nao pode ser desfeita pela interface.
+                </p>
+              ) : (
+                <label className="mt-5 block text-sm font-bold text-palco-text-muted">
+                  Motivo da recusa
+                  <textarea
+                    value={rejectionReason}
+                    onChange={(event) => setRejectionReason(event.target.value)}
+                    maxLength={300}
+                    autoFocus
+                    placeholder="Explique por que o saque foi recusado"
+                    className="mt-2 min-h-24 w-full rounded-xl border border-palco-border bg-palco-dark px-3 py-2 text-sm text-palco-text outline-none placeholder:text-palco-text-subtle focus:border-palco-gold"
+                  />
+                </label>
+              )}
+
+              <div className="mt-6 flex justify-end gap-3">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setWithdrawalDialog(null);
+                    setRejectionReason('');
+                  }}
+                  disabled={processingId === withdrawalDialog.request.id}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  variant={withdrawalDialog.action === 'approve' ? 'primary' : 'danger'}
+                  loading={processingId === withdrawalDialog.request.id}
+                  disabled={withdrawalDialog.action === 'reject' && !rejectionReason.trim()}
+                  onClick={() => handleWithdrawal(
+                    withdrawalDialog.request,
+                    withdrawalDialog.action,
+                    rejectionReason
+                  )}
+                >
+                  {withdrawalDialog.action === 'approve' ? 'PIX realizado, concluir' : 'Recusar e devolver saldo'}
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </div>
       )}
     </div>
   );

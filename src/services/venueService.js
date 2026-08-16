@@ -67,12 +67,10 @@ export async function updateBookingStatus(requestId, status) {
     return { data: null, error: new Error('Status de contratacao invalido.') };
   }
 
-  const { data, error } = await supabase
-    .from('booking_requests')
-    .update({ status })
-    .eq('id', requestId)
-    .select()
-    .single();
+  const { data, error } = await supabase.rpc('update_booking_status', {
+    p_request_id: requestId,
+    p_status: status,
+  });
 
   return { data, error };
 }
