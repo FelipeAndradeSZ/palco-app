@@ -15,9 +15,8 @@ export default function MarketplacePage() {
   const [artists, setArtists] = useState([]);
   const [filters, setFilters] = useState({ genre: '', region: '', state: '', city: '' });
   const [loading, setLoading] = useState(true);
-  const [bookingArtistId, setBookingArtistId] = useState(null);
   const [bookingLoadingId, setBookingLoadingId] = useState(null);
-  const [bookingMessage, setBookingMessage] = useState('');
+  const [bookingMessages, setBookingMessages] = useState({});
   const [feedback, setFeedback] = useState(null);
   const [bookingRequests, setBookingRequests] = useState([]);
 
@@ -66,17 +65,14 @@ export default function MarketplacePage() {
     setFeedback(null);
 
     try {
-      const details = artist.artist_details || {};
       const { error } = await createBookingRequest({
         venueId: profile.id,
         artistId: artist.id,
-        city: details.city,
-        state: details.state,
-        message: bookingMessage || `Tenho interesse em contratar ${artist.name} para uma apresentacao presencial.`,
+        message: bookingMessages[artist.id]?.trim() || `Tenho interesse em contratar ${artist.name} para uma apresentacao presencial.`,
       });
 
       if (error) throw error;
-      setBookingMessage('');
+      setBookingMessages((current) => ({ ...current, [artist.id]: '' }));
       setFeedback({ type: 'success', message: 'Solicitacao enviada ao artista.' });
       await loadVenueBookings();
     } catch (err) {
@@ -216,9 +212,11 @@ export default function MarketplacePage() {
                   {profile?.role === 'venue' && (
                     <div className="mt-4 space-y-3">
                       <textarea
-                        value={bookingArtistId === artist.id ? bookingMessage : ''}
-                        onChange={(event) => setBookingMessage(event.target.value)}
-                        onFocus={() => setBookingArtistId(artist.id)}
+                        value={bookingMessages[artist.id] || ''}
+                        onChange={(event) => setBookingMessages((current) => ({
+                          ...current,
+                          [artist.id]: event.target.value,
+                        }))}
                         placeholder="Mensagem opcional para o artista"
                         className="min-h-20 w-full rounded-xl border border-palco-border bg-palco-dark px-3 py-2 text-sm text-palco-text outline-none placeholder:text-palco-text-subtle focus:border-palco-gold"
                         maxLength={500}

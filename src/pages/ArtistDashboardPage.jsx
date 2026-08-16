@@ -481,7 +481,11 @@ export default function ArtistDashboardPage() {
                   profileId={profile?.id}
                   onChanged={refetchRooms}
                 />
-                <ArtistRequestQueue activeRequests={activeRequests} onStatusChanged={loadWalletData} />
+                <ArtistRequestQueue
+                  activeRequests={activeRequests}
+                  artistId={profile?.id}
+                  onStatusChanged={loadWalletData}
+                />
               </div>
 
               <div className="min-w-0 space-y-4">

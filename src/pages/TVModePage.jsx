@@ -63,6 +63,7 @@ export default function TVModePage() {
   const [subscription, setSubscription] = useState(null);
   const [startingSubscription, setStartingSubscription] = useState(null);
   const [presenceRoomId, setPresenceRoomId] = useState(null);
+  const [configFeedback, setConfigFeedback] = useState(null);
 
   // Relógio atualizado a cada minuto
   useEffect(() => {
@@ -105,13 +106,19 @@ export default function TVModePage() {
   }, [profile?.id]);
 
   async function updateVenueConfig(key, value) {
+    const previous = venueConfig;
     const next = { ...venueConfig, [key]: value };
     setVenueConfig(next);
+    setConfigFeedback(null);
 
     if (!profile?.id) return;
     setSavingConfig(true);
     try {
-      await upsertVenueProfile(profile.id, next);
+      const { error } = await upsertVenueProfile(profile.id, next);
+      if (error) throw error;
+    } catch (err) {
+      setVenueConfig(previous);
+      setConfigFeedback({ type: 'error', message: err.message || 'Nao foi possivel salvar a configuracao.' });
     } finally {
       setSavingConfig(false);
     }
@@ -119,8 +126,11 @@ export default function TVModePage() {
 
   async function startSubscription(planTier) {
     setStartingSubscription(planTier);
+    setConfigFeedback(null);
     try {
       await createSubscriptionCheckout(planTier, '/tv');
+    } catch (err) {
+      setConfigFeedback({ type: 'error', message: err.message || 'Nao foi possivel iniciar a assinatura.' });
     } finally {
       setStartingSubscription(null);
     }
@@ -216,10 +226,17 @@ export default function TVModePage() {
           )}
         </div>
 
+        {configFeedback && (
+          <div className="mb-6 w-full max-w-2xl rounded-xl border border-palco-live/30 bg-palco-live/10 px-4 py-3 text-center text-sm text-palco-live">
+            {configFeedback.message}
+          </div>
+        )}
+
         <div className="mb-8 grid w-full max-w-5xl gap-3 rounded-3xl border border-palco-border bg-palco-card/70 p-4 backdrop-blur lg:grid-cols-5">
           <select
             value={venueConfig.preferred_genre}
             onChange={(event) => updateVenueConfig('preferred_genre', event.target.value)}
+            disabled={savingConfig}
             className="rounded-xl border border-palco-border bg-palco-dark px-3 py-2 text-sm text-palco-text outline-none focus:border-palco-gold"
           >
             <option value="">Todos os generos</option>
@@ -230,6 +247,7 @@ export default function TVModePage() {
           <select
             value={venueConfig.vibe_level}
             onChange={(event) => updateVenueConfig('vibe_level', event.target.value)}
+            disabled={savingConfig}
             className="rounded-xl border border-palco-border bg-palco-dark px-3 py-2 text-sm text-palco-text outline-none focus:border-palco-gold"
           >
             <option value="calmo">Calmo</option>
@@ -239,6 +257,7 @@ export default function TVModePage() {
           <select
             value={venueConfig.interaction_level}
             onChange={(event) => updateVenueConfig('interaction_level', event.target.value)}
+            disabled={savingConfig}
             className="rounded-xl border border-palco-border bg-palco-dark px-3 py-2 text-sm text-palco-text outline-none focus:border-palco-gold"
           >
             <option value="low">Pouca interacao</option>
@@ -248,6 +267,7 @@ export default function TVModePage() {
           <select
             value={venueConfig.preferred_region}
             onChange={(event) => updateVenueConfig('preferred_region', event.target.value)}
+            disabled={savingConfig}
             className="rounded-xl border border-palco-border bg-palco-dark px-3 py-2 text-sm text-palco-text outline-none focus:border-palco-gold"
           >
             <option value="">Todas as regioes</option>

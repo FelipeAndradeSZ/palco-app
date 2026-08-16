@@ -12,6 +12,7 @@ import Button from '../../ui/Button';
 export default function ChatBox({ messages, onSendMessage, isConnected }) {
   const [inputText, setInputText] = useState('');
   const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState(null);
   const messagesEndRef = useRef(null);
 
   // Auto-scroll para a última mensagem
@@ -25,18 +26,19 @@ export default function ChatBox({ messages, onSendMessage, isConnected }) {
 
     const validation = validateChatMessage(inputText);
     if (!validation.valid) {
-      // Idealmente mostraríamos um toast aqui, por hora apenas ignoramos
-      console.warn(validation.error);
+      setSendError(validation.error);
       return;
     }
 
     setSending(true);
+    setSendError(null);
     try {
       const result = await onSendMessage(validation.sanitized);
       if (result?.error) throw new Error(result.error.message);
       setInputText('');
     } catch (err) {
       console.error('Erro ao enviar mensagem', err);
+      setSendError(err.message || 'Nao foi possivel enviar a mensagem.');
     } finally {
       setSending(false);
     }
@@ -100,12 +102,21 @@ export default function ChatBox({ messages, onSendMessage, isConnected }) {
         <div ref={messagesEndRef} />
       </div>
 
+      {sendError && (
+        <div className="border-t border-palco-live/20 bg-palco-live/10 px-4 py-2 text-xs text-palco-live">
+          {sendError}
+        </div>
+      )}
+
       {/* Input de Envio */}
       <form onSubmit={handleSubmit} className="p-3 border-t border-palco-border bg-palco-dark/50 flex gap-2">
         <input
           type="text"
           value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
+          onChange={(e) => {
+            setInputText(e.target.value);
+            if (sendError) setSendError(null);
+          }}
           placeholder={isConnected ? "Digite sua mensagem..." : "Aguarde..."}
           disabled={!isConnected || sending}
           className="flex-1 bg-palco-black border border-palco-border rounded-lg px-3 py-2 text-sm text-palco-text focus:outline-none focus:border-palco-gold disabled:opacity-50"

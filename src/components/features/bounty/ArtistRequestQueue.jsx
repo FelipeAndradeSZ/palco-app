@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { updateRequestStatus } from '../../../services/bountyService';
 import Button from '../../ui/Button';
 
-export default function ArtistRequestQueue({ activeRequests, onStatusChanged }) {
+export default function ArtistRequestQueue({ activeRequests, artistId, onStatusChanged }) {
   const [processingId, setProcessingId] = useState(null);
   const [feedback, setFeedback] = useState(null);
 
@@ -73,15 +73,17 @@ export default function ArtistRequestQueue({ activeRequests, onStatusChanged }) 
         <div className="flex gap-2 w-full sm:w-auto">
           {isPending ? (
             <>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="flex-1 sm:flex-none text-palco-live hover:text-red-400 hover:bg-palco-live/10"
-                onClick={() => handleStatusChange(req.id, 'cancelled')}
-                disabled={processingId === req.id}
-              >
-                Recusar
-              </Button>
+              {req.target_artist_id === artistId && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="flex-1 sm:flex-none text-palco-live hover:text-red-400 hover:bg-palco-live/10"
+                  onClick={() => handleStatusChange(req.id, 'cancelled')}
+                  disabled={processingId === req.id}
+                >
+                  Recusar
+                </Button>
+              )}
               <Button
                 variant="primary"
                 size="sm"

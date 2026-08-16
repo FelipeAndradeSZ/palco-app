@@ -53,6 +53,31 @@ serve(async (req) => {
       throw new HttpError(403, 'Apenas estabelecimentos podem assinar o Plano Ambiente')
     }
 
+    const { data: activeSubscription, error: subscriptionError } = await supabase
+      .from('subscriptions')
+      .select('stripe_subscription_id, stripe_customer_id, plan_tier, status')
+      .eq('profile_id', authData.user.id)
+      .in('status', ['active', 'trialing', 'past_due', 'incomplete'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (subscriptionError) throw subscriptionError
+    if (activeSubscription) {
+      throw new HttpError(409, 'Este estabelecimento ja possui uma assinatura em andamento')
+    }
+
+    const { data: previousSubscription, error: previousSubscriptionError } = await supabase
+      .from('subscriptions')
+      .select('stripe_customer_id')
+      .eq('profile_id', authData.user.id)
+      .not('stripe_customer_id', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (previousSubscriptionError) throw previousSubscriptionError
+
     const { planTier = 'basic', returnTo } = await req.json()
     if (!['basic', 'premium'].includes(planTier)) throw new HttpError(422, 'Plano invalido')
 
@@ -61,6 +86,7 @@ serve(async (req) => {
 
     const returnPath = safeReturnPath(returnTo)
 
+    const customerId = previousSubscription?.stripe_customer_id || null
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       payment_method_types: ['card'],
@@ -68,7 +94,9 @@ serve(async (req) => {
       success_url: `${origin}${returnPath}${returnPath.includes('?') ? '&' : '?'}subscription=success`,
       cancel_url: `${origin}${returnPath}${returnPath.includes('?') ? '&' : '?'}subscription=cancel`,
       client_reference_id: authData.user.id,
-      customer_email: authData.user.email || undefined,
+      ...(customerId
+        ? { customer: customerId }
+        : { customer_email: authData.user.email || undefined }),
       metadata: {
         userId: authData.user.id,
         planTier,
