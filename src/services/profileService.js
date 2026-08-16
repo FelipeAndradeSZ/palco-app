@@ -12,13 +12,36 @@ export async function getProfile(userId) {
   const { data, error } = await supabase
     .from('profiles')
     .select(`
-      *,
-      artist_details (*),
-      venue_details (*)
+      id,
+      role,
+      name,
+      avatar_url,
+      bio,
+      city,
+      created_at,
+      onboarding_completed,
+      artist_details (
+        profile_id,
+        quality_tier,
+        main_genre,
+        rating,
+        bio,
+        repertoire,
+        instagram_url,
+        city,
+        state,
+        region,
+        available_for_booking
+      )
     `)
     .eq('id', userId)
     .single();
 
+  return { data, error };
+}
+
+export async function getOwnProfile() {
+  const { data, error } = await supabase.rpc('get_own_profile');
   return { data, error };
 }
 
@@ -41,18 +64,16 @@ export async function updateProfile(userId, updates) {
  * Atualiza dados específicos do artista.
  */
 export async function updateArtistDetails(profileId, updates) {
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from('artist_details')
     .update(updates)
-    .eq('profile_id', profileId)
-    .select()
-    .single();
+    .eq('profile_id', profileId);
 
-  return { data, error };
+  return { data: null, error };
 }
 
 export async function upsertArtistDetails(profileId, updates) {
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from('artist_details')
     .upsert(
       {
@@ -60,11 +81,9 @@ export async function upsertArtistDetails(profileId, updates) {
         ...updates,
       },
       { onConflict: 'profile_id' }
-    )
-    .select()
-    .single();
+    );
 
-  return { data, error };
+  return { data: null, error };
 }
 
 export async function completeOnboarding(role, mainGenre = null) {

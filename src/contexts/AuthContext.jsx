@@ -13,7 +13,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import * as authService from '../services/authService';
-import { getProfile } from '../services/profileService';
+import { getOwnProfile } from '../services/profileService';
 import { AuthContext } from './AuthContextObject';
 
 export function AuthProvider({ children }) {
@@ -26,9 +26,9 @@ export function AuthProvider({ children }) {
    * Carrega o perfil completo do banco após auth.
    * Inclui artist_details/venue_details via join.
    */
-  const loadProfile = useCallback(async (userId) => {
+  const loadProfile = useCallback(async () => {
     try {
-      const { data, error: profileError } = await getProfile(userId);
+      const { data, error: profileError } = await getOwnProfile();
       if (profileError) {
         console.error('[PALCO] Erro ao carregar perfil:', profileError.message);
         setProfile(null);
@@ -54,7 +54,7 @@ export function AuthProvider({ children }) {
         const { session } = await authService.getSession();
         if (isMounted && session?.user) {
           setUser(session.user);
-          await loadProfile(session.user.id);
+          await loadProfile();
         }
       } catch (err) {
         console.error('[PALCO] Erro na inicialização de auth:', err);
@@ -78,7 +78,7 @@ export function AuthProvider({ children }) {
         // O OnboardingModal cuida da seleção de role para novos usuários OAuth.
         // Não usamos mais localStorage para pending_role (vetor de escalação de privilégio).
 
-        await loadProfile(session.user.id);
+        await loadProfile();
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
         setProfile(null);
@@ -161,7 +161,7 @@ export function AuthProvider({ children }) {
    */
   const refreshProfile = useCallback(async () => {
     if (user?.id) {
-      await loadProfile(user.id);
+      await loadProfile();
     }
   }, [user, loadProfile]);
 

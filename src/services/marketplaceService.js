@@ -14,7 +14,6 @@ export async function searchArtists({ genre = '', region = '', state = '', city 
         bio,
         repertoire,
         instagram_url,
-        booking_whatsapp,
         city,
         state,
         region,

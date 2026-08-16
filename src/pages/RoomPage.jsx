@@ -687,6 +687,7 @@ export default function RoomPage() {
   const [tipMessage, setTipMessage] = useState('');
   const [tipLoading, setTipLoading] = useState(false);
   const [feedback, setFeedback] = useState(null);
+  const [presenceReady, setPresenceReady] = useState(false);
   const [battleSong, setBattleSong] = useState('');
   const [battleAmount, setBattleAmount] = useState(20);
   const [battleOpponentId, setBattleOpponentId] = useState('');
@@ -719,7 +720,7 @@ export default function RoomPage() {
     tvAlerts,
     activeBattles,
     battleResults,
-  } = useRoomRealtime(roomId, {
+  } = useRoomRealtime(presenceReady ? roomId : null, {
     onRoomUpdate: handleRoomUpdate,
     targetArtistId: selectedArtist?.id || null,
     onLikeReceived: handleIncomingLike,
@@ -740,6 +741,7 @@ export default function RoomPage() {
       if (isMounted) {
         setRoom(null);
         setLoading(true);
+        setPresenceReady(false);
       }
       const { data: roomData, error: roomError } = await getRoomById(roomId);
       if (roomError || !roomData) {
@@ -750,14 +752,19 @@ export default function RoomPage() {
       if (isMounted) setRoom(roomData);
 
       if (profile?.id) {
-        const joinResult = await joinRoom(roomId, profile.id, profile.role);
-        if (joinResult.error && isMounted) {
-          setFeedback({ type: 'error', message: 'Nao foi possivel registrar sua presenca na sala.' });
-        } else {
-          presenceTimer = setInterval(() => {
-            joinRoom(roomId, profile.id, profile.role);
-          }, 25_000);
+        async function refreshPresence() {
+          const joinResult = await joinRoom(roomId, profile.id, profile.role);
+          if (!isMounted) return;
+          if (joinResult.error) {
+            setPresenceReady(false);
+            setFeedback({ type: 'error', message: 'Nao foi possivel registrar sua presenca na sala.' });
+          } else {
+            setPresenceReady(true);
+          }
         }
+
+        await refreshPresence();
+        presenceTimer = setInterval(refreshPresence, 25_000);
 
         const { data: walletData } = await getWallet(profile.id);
         if (isMounted && walletData) setWallet(walletData);

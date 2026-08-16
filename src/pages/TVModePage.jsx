@@ -62,6 +62,7 @@ export default function TVModePage() {
   const [savingConfig, setSavingConfig] = useState(false);
   const [subscription, setSubscription] = useState(null);
   const [startingSubscription, setStartingSubscription] = useState(null);
+  const [presenceRoomId, setPresenceRoomId] = useState(null);
 
   // Relógio atualizado a cada minuto
   useEffect(() => {
@@ -138,21 +139,31 @@ export default function TVModePage() {
   useEffect(() => {
     if (!activeRoomId || !profile?.id) return undefined;
 
-    joinRoom(activeRoomId, profile.id, profile.role);
-    const timer = setInterval(() => {
-      joinRoom(activeRoomId, profile.id, profile.role);
-    }, 25_000);
+    let cancelled = false;
+
+    async function refreshPresence() {
+      const { error } = await joinRoom(activeRoomId, profile.id, profile.role);
+      if (!cancelled) setPresenceRoomId(error ? null : activeRoomId);
+    }
+
+    refreshPresence();
+    const timer = setInterval(refreshPresence, 25_000);
 
     return () => {
+      cancelled = true;
       clearInterval(timer);
+      setPresenceRoomId((current) => current === activeRoomId ? null : current);
       leaveRoom(activeRoomId, profile.id);
     };
   }, [activeRoomId, profile?.id, profile?.role]);
 
   // Conecta ao WebSocket da sala para chat, alertas e pedidos reais em tempo real
-  const { tvAlerts, activeRequests, activeBattles, battleResults } = useRoomRealtime(activeRoomId, {
+  const { tvAlerts, activeRequests, activeBattles, battleResults } = useRoomRealtime(
+    presenceRoomId === activeRoomId ? activeRoomId : null,
+    {
     targetArtistId: selectedArtist?.id || null,
-  });
+    }
+  );
 
   // Conecta ao stream WebRTC (câmera + microfone) do artista
   const listenerMedia = useRoomMediaStream({
