@@ -153,14 +153,20 @@ export function subscribeToRoom(roomId, {
 
   // Subscribe to both channels.
   dbChannel.subscribe((status) => {
-    if (onConnectionStatus) onConnectionStatus(status);
+    if (onConnectionStatus) onConnectionStatus(status, 'database');
 
     if (status === 'CHANNEL_ERROR') {
       console.error(`[PALCO Realtime] Erro de conexao DB na sala ${roomId}`);
     }
   });
 
-  broadcastChannel.subscribe();
+  broadcastChannel.subscribe((status) => {
+    if (onConnectionStatus) onConnectionStatus(status, 'broadcast');
+
+    if (status === 'CHANNEL_ERROR') {
+      console.error(`[PALCO Realtime] Erro no canal de interacoes da sala ${roomId}`);
+    }
+  });
 
   return { dbChannel, broadcastChannel };
 }

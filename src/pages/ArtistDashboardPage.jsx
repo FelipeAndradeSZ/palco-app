@@ -299,7 +299,15 @@ export default function ArtistDashboardPage() {
     };
   }, [activeRoomId, profile?.id]);
 
-  const { activeRequests, activeBattles, messages, isConnected, sendChatMessage, tvAlerts } = useRoomRealtime(activeRoomId, {
+  const {
+    activeRequests,
+    activeBattles,
+    messages,
+    isConnected,
+    realtimeError,
+    sendChatMessage,
+    tvAlerts,
+  } = useRoomRealtime(activeRoomId, {
     targetArtistId: profile?.id || null,
     onFinancialActivity: refreshFinancialActivity,
   });
@@ -549,6 +557,7 @@ export default function ArtistDashboardPage() {
                   <ChatBox
                     messages={messages}
                     isConnected={isConnected}
+                    connectionError={realtimeError}
                     onSendMessage={sendChatMessage}
                   />
                 </div>

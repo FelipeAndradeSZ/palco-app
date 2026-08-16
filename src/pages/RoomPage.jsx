@@ -84,7 +84,7 @@ function ArtistSelectionScreen({ room, artists, onSelect }) {
   );
 }
 
-function LiveChat({ messages, isConnected, onSendMessage, className = '' }) {
+function LiveChat({ messages, connectionError, onSendMessage, className = '' }) {
   const [inputText, setInputText] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState(null);
@@ -161,20 +161,22 @@ function LiveChat({ messages, isConnected, onSendMessage, className = '' }) {
         <input
           value={inputText}
           onChange={(event) => setInputText(event.target.value)}
-          placeholder={isConnected ? 'Comente na live...' : 'Conectando chat...'}
-          disabled={!isConnected || sending}
+          placeholder="Comente na live..."
+          disabled={sending}
           className="min-w-0 flex-1 rounded-full border border-white/15 bg-black/55 px-4 py-3 text-sm text-white outline-none placeholder:text-palco-text-subtle focus:border-palco-gold disabled:opacity-60"
           maxLength={500}
         />
         <button
           type="submit"
-          disabled={!isConnected || sending || !inputText.trim()}
+          disabled={sending || !inputText.trim()}
           className="rounded-full bg-palco-gold px-5 py-3 text-sm font-black text-palco-black transition hover:bg-palco-gold-light disabled:opacity-60"
         >
           Enviar
         </button>
       </form>
-      {error && <p className="px-2 text-xs text-palco-live">{error}</p>}
+      {(error || connectionError) && (
+        <p className="px-2 text-xs text-palco-live">{error || connectionError}</p>
+      )}
     </div>
   );
 }
@@ -484,7 +486,7 @@ function DesktopLiveRoom({
   listenEnabled,
   setListenEnabled,
   messages,
-  isConnected,
+  realtimeError,
   sendChatMessage,
   profile,
   wallet,
@@ -597,9 +599,9 @@ function DesktopLiveRoom({
             </div>
             <div className="h-[320px]">
               <LiveChat
-                messages={messages}
-                isConnected={isConnected}
-                onSendMessage={sendChatMessage}
+              messages={messages}
+              connectionError={realtimeError}
+              onSendMessage={sendChatMessage}
               />
             </div>
           </section>
@@ -702,7 +704,7 @@ export default function RoomPage() {
 
   const {
     messages,
-    isConnected,
+    realtimeError,
     sendChatMessage,
     votes,
     userVotes,
@@ -963,7 +965,7 @@ export default function RoomPage() {
           listenEnabled={listenEnabled}
           setListenEnabled={setListenEnabled}
           messages={messages}
-          isConnected={isConnected}
+          realtimeError={realtimeError}
           sendChatMessage={sendChatMessage}
           profile={profile}
           wallet={wallet}
@@ -1067,7 +1069,7 @@ export default function RoomPage() {
               </div>
               <LiveChat
                 messages={messages}
-                isConnected={isConnected}
+                connectionError={realtimeError}
                 onSendMessage={sendChatMessage}
                 className="pointer-events-auto h-[min(32svh,240px)]"
               />

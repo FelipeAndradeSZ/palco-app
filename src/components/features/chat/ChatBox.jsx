@@ -9,7 +9,7 @@ import { useState, useRef, useEffect } from 'react';
 import { validateChatMessage } from '../../../lib/validators';
 import Button from '../../ui/Button';
 
-export default function ChatBox({ messages, onSendMessage, isConnected }) {
+export default function ChatBox({ messages, onSendMessage, isConnected, connectionError = null }) {
   const [inputText, setInputText] = useState('');
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState(null);
@@ -22,7 +22,7 @@ export default function ChatBox({ messages, onSendMessage, isConnected }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!inputText.trim() || sending || !isConnected) return;
+    if (!inputText.trim() || sending) return;
 
     const validation = validateChatMessage(inputText);
     if (!validation.valid) {
@@ -85,7 +85,7 @@ export default function ChatBox({ messages, onSendMessage, isConnected }) {
         <div className="flex items-center gap-2">
           <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-palco-success pulse-animation' : 'bg-palco-text-muted'}`} />
           <span className="text-xs text-palco-text-subtle">
-            {isConnected ? 'Conectado' : 'Conectando...'}
+            {isConnected ? 'Conectado' : connectionError ? 'Reconectando' : 'Conectando...'}
           </span>
         </div>
       </div>
@@ -102,9 +102,9 @@ export default function ChatBox({ messages, onSendMessage, isConnected }) {
         <div ref={messagesEndRef} />
       </div>
 
-      {sendError && (
+      {(sendError || connectionError) && (
         <div className="border-t border-palco-live/20 bg-palco-live/10 px-4 py-2 text-xs text-palco-live">
-          {sendError}
+          {sendError || connectionError}
         </div>
       )}
 
@@ -117,8 +117,8 @@ export default function ChatBox({ messages, onSendMessage, isConnected }) {
             setInputText(e.target.value);
             if (sendError) setSendError(null);
           }}
-          placeholder={isConnected ? "Digite sua mensagem..." : "Aguarde..."}
-          disabled={!isConnected || sending}
+          placeholder="Digite sua mensagem..."
+          disabled={sending}
           className="flex-1 bg-palco-black border border-palco-border rounded-lg px-3 py-2 text-sm text-palco-text focus:outline-none focus:border-palco-gold disabled:opacity-50"
           maxLength={500}
         />
@@ -126,7 +126,7 @@ export default function ChatBox({ messages, onSendMessage, isConnected }) {
           type="submit"
           variant="primary"
           size="sm"
-          disabled={!isConnected || !inputText.trim() || sending}
+          disabled={!inputText.trim() || sending}
           loading={sending}
           className="shrink-0"
         >
