@@ -3,7 +3,9 @@ import {
   sanitizeText,
   validateBountyValue,
   validateChatMessage,
+  validateBrazilState,
   validatePassword,
+  validateProfessionalUrl,
   validateSongTitle,
 } from './validators';
 
@@ -34,5 +36,16 @@ describe('PALCO input validation', () => {
       valid: true,
       sanitized: 'Evidencias',
     });
+  });
+
+  it('accepts only safe professional links', () => {
+    expect(validateProfessionalUrl('https://instagram.com/palco')).toMatchObject({ valid: true });
+    expect(validateProfessionalUrl('javascript:alert(1)').valid).toBe(false);
+    expect(validateProfessionalUrl('instagram.com/palco').valid).toBe(false);
+  });
+
+  it('normalizes Brazilian state abbreviations', () => {
+    expect(validateBrazilState(' pr ')).toEqual({ valid: true, sanitized: 'PR' });
+    expect(validateBrazilState('Parana').valid).toBe(false);
   });
 });

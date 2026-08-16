@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { updateProfile, upsertArtistDetails } from '../services/profileService';
+import { saveOwnProfile } from '../services/profileService';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import { BRAZIL_REGIONS, MUSIC_GENRES, USER_ROLE_LABELS } from '../lib/constants';
+import { validateBrazilState, validateName, validateProfessionalUrl } from '../lib/validators';
 
 export default function ProfilePage() {
   const { profile, refreshProfile } = useAuth();
@@ -59,29 +60,23 @@ export default function ProfilePage() {
     setFeedback(null);
 
     try {
-      const profileResult = await updateProfile(profile.id, {
-        name: form.name.trim() || profile.name,
+      const nameResult = validateName(form.name);
+      if (!nameResult.valid) throw new Error(nameResult.error);
+      if (isArtist && !form.mainGenre) throw new Error('Selecione o genero musical principal.');
+
+      const stateResult = validateBrazilState(form.state);
+      if (!stateResult.valid) throw new Error(stateResult.error);
+
+      const urlResult = validateProfessionalUrl(form.instagramUrl);
+      if (!urlResult.valid) throw new Error(urlResult.error);
+
+      const result = await saveOwnProfile({
+        ...form,
+        name: nameResult.sanitized,
+        state: stateResult.sanitized,
+        instagramUrl: urlResult.sanitized,
       });
-
-      if (profileResult.error) throw profileResult.error;
-
-      if (isArtist) {
-        const detailsPayload = {
-          main_genre: form.mainGenre || null,
-          bio: form.bio.trim() || null,
-          repertoire: form.repertoire.trim() || null,
-          pix_key: form.pixKey.trim() || null,
-          instagram_url: form.instagramUrl.trim() || null,
-          booking_whatsapp: form.bookingWhatsapp.trim() || null,
-          city: form.city.trim() || null,
-          state: form.state.trim() || null,
-          region: form.region || null,
-          available_for_booking: form.availableForBooking,
-        };
-
-        const detailsResult = await upsertArtistDetails(profile.id, detailsPayload);
-        if (detailsResult.error) throw detailsResult.error;
-      }
+      if (result.error) throw result.error;
 
       await refreshProfile();
       setFeedback({ type: 'success', message: 'Perfil atualizado.' });
@@ -138,6 +133,7 @@ export default function ProfilePage() {
                     Genero principal
                   </span>
                   <select
+                    required
                     value={form.mainGenre}
                     onChange={(event) => updateField('mainGenre', event.target.value)}
                     className="w-full rounded-xl border border-palco-border bg-palco-dark px-4 py-3 text-sm text-palco-text outline-none focus:border-palco-gold"
@@ -209,7 +205,7 @@ export default function ProfilePage() {
                     <span className="mb-2 block text-sm font-medium text-palco-text-muted">Estado</span>
                     <input
                       value={form.state}
-                      onChange={(event) => updateField('state', event.target.value)}
+                      onChange={(event) => updateField('state', event.target.value.toUpperCase())}
                       className="w-full rounded-xl border border-palco-border bg-palco-dark px-4 py-3 text-sm text-palco-text outline-none focus:border-palco-gold"
                       maxLength={2}
                       placeholder="PR"

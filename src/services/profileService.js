@@ -86,6 +86,24 @@ export async function upsertArtistDetails(profileId, updates) {
   return { data: null, error };
 }
 
+export async function saveOwnProfile(profile) {
+  const { data, error } = await supabase.rpc('save_own_profile', {
+    p_name: profile.name,
+    p_main_genre: profile.mainGenre || null,
+    p_bio: profile.bio || null,
+    p_repertoire: profile.repertoire || null,
+    p_pix_key: profile.pixKey || null,
+    p_instagram_url: profile.instagramUrl || null,
+    p_booking_whatsapp: profile.bookingWhatsapp || null,
+    p_city: profile.city || null,
+    p_state: profile.state || null,
+    p_region: profile.region || null,
+    p_available_for_booking: profile.availableForBooking,
+  });
+
+  return { data, error };
+}
+
 export async function completeOnboarding(role, mainGenre = null) {
   const { data, error } = await supabase.rpc('complete_profile_onboarding', {
     p_role: role,

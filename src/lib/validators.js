@@ -115,6 +115,32 @@ export function validateName(name) {
   return { valid: true, sanitized };
 }
 
+export function validateProfessionalUrl(url) {
+  const sanitized = sanitizeText(url);
+  if (!sanitized) return { valid: true, sanitized: null };
+  if (sanitized.length > 220) {
+    return { valid: false, error: 'Link profissional muito longo.' };
+  }
+
+  try {
+    const parsed = new URL(sanitized);
+    if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('invalid protocol');
+  } catch {
+    return { valid: false, error: 'Use um link iniciado por http:// ou https://.' };
+  }
+
+  return { valid: true, sanitized };
+}
+
+export function validateBrazilState(state) {
+  const sanitized = sanitizeText(state).toUpperCase();
+  if (!sanitized) return { valid: true, sanitized: null };
+  if (!/^[A-Z]{2}$/.test(sanitized)) {
+    return { valid: false, error: 'Informe o estado com duas letras, como PR.' };
+  }
+  return { valid: true, sanitized };
+}
+
 // ============================
 // Validação de Valor de Pedido
 // ============================
