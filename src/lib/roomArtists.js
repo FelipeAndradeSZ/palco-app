@@ -73,5 +73,5 @@ export function roomHasArtist(room, artistId) {
 
 export function getArtistInteractionUrl(roomId, artistId) {
   const artistParam = artistId ? `?artist=${encodeURIComponent(artistId)}` : '';
-  return `/interact/${roomId}${artistParam}`;
+  return `/interact/${encodeURIComponent(roomId)}${artistParam}`;
 }

@@ -3,6 +3,7 @@ import { useRooms } from '../hooks/useRooms';
 import { useAuth } from '../hooks/useAuth';
 import RoomGrid from '../components/features/rooms/RoomGrid';
 import Badge from '../components/ui/Badge';
+import { getLoginUrl } from '../lib/navigation';
 
 export default function RoomsPage() {
   const { rooms, loading, error } = useRooms();
@@ -10,7 +11,8 @@ export default function RoomsPage() {
   const navigate = useNavigate();
 
   function handleRoomClick(room) {
-    navigate(isAuthenticated ? `/room/${room.id}` : '/login');
+    const roomPath = `/room/${room.id}`;
+    navigate(isAuthenticated ? roomPath : getLoginUrl(roomPath));
   }
 
   return (

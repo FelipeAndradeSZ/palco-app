@@ -8,19 +8,36 @@ import Button from '../../ui/Button';
 
 export default function ArtistRequestQueue({ activeRequests, onStatusChanged }) {
   const [processingId, setProcessingId] = useState(null);
+  const [feedback, setFeedback] = useState(null);
 
   const pendingRequests = activeRequests.filter(r => r.status === 'pending');
   const acceptedRequests = activeRequests.filter(r => r.status === 'accepted' || r.status === 'playing');
 
   const handleStatusChange = async (id, newStatus) => {
     setProcessingId(id);
+    setFeedback(null);
     try {
-      await updateRequestStatus(id, newStatus);
+      const { error } = await updateRequestStatus(id, newStatus);
+      if (error) throw error;
+
+      setFeedback({
+        type: 'success',
+        message: newStatus === 'accepted'
+          ? 'Pedido aceito. O valor continua protegido ate a musica ser tocada.'
+          : newStatus === 'completed'
+            ? 'Pedido concluido e valor liberado para sua carteira.'
+            : 'Pedido cancelado e valor devolvido ao ouvinte.',
+      });
+
       if (onStatusChanged) {
-        onStatusChanged();
+        await onStatusChanged();
       }
     } catch (err) {
       console.error('Erro ao atualizar pedido:', err);
+      setFeedback({
+        type: 'error',
+        message: err.message || 'Nao foi possivel atualizar o pedido.',
+      });
     } finally {
       setProcessingId(null);
     }
@@ -35,7 +52,7 @@ export default function ArtistRequestQueue({ activeRequests, onStatusChanged }) 
           <div className="flex items-center gap-3 mb-1">
             <span className="font-display font-bold text-lg text-palco-text">{req.song_title}</span>
             <span className="text-palco-success font-bold text-sm bg-palco-success/10 px-2 py-0.5 rounded">
-              R$ {req.bounty_value.toFixed(2)}
+              R$ {Number(req.bounty_value || 0).toFixed(2)}
             </span>
           </div>
           <p className="text-sm text-palco-text-muted">
@@ -93,6 +110,17 @@ export default function ArtistRequestQueue({ activeRequests, onStatusChanged }) 
 
   return (
     <div className="space-y-8">
+      {feedback && (
+        <div className={`rounded-xl border px-4 py-3 text-sm ${
+          feedback.type === 'success'
+            ? 'border-palco-success/30 bg-palco-success/10 text-palco-success'
+            : 'border-palco-live/30 bg-palco-live/10 text-palco-live'
+        }`}
+        >
+          {feedback.message}
+        </div>
+      )}
+
       {/* Repertório Atual */}
       <section>
         <h3 className="font-display font-bold text-xl text-palco-gold mb-4 flex items-center gap-2">

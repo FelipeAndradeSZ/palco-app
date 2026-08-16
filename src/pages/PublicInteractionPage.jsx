@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { getRoomById } from '../services/roomService';
 import { createSongRequest } from '../services/bountyService';
 import { useAuth } from '../hooks/useAuth';
@@ -7,6 +7,7 @@ import { useRoomMediaStream } from '../hooks/useRoomMediaStream';
 import { BOUNTY_PRESETS } from '../lib/constants';
 import { validateBountyValue, validateDedication, validateSongTitle, sanitizeText } from '../lib/validators';
 import { getActiveArtists } from '../lib/roomArtists';
+import { getLoginUrl } from '../lib/navigation';
 import Badge from '../components/ui/Badge';
 import Spinner from '../components/ui/Spinner';
 import LiveStreamPlayer from '../components/features/video/LiveStreamPlayer';
@@ -17,22 +18,8 @@ const ACTIONS = [
   { id: 'vote', label: 'Votar' },
 ];
 
-const FALLBACK_ROOM = {
-  id: 'demo-palco',
-  name: 'Sertanejo Churrasco',
-  genre: 'Sertanejo',
-  listener_count: 1245,
-};
-
-const FALLBACK_ARTISTS = [
-  { id: 'gustavo-martins', name: 'Gustavo Martins', main_genre: 'Sertanejo', rating: 4.9, current_song: 'Evidências' },
-  { id: 'ana-ribeiro', name: 'Ana Ribeiro', main_genre: 'Rock acústico', rating: 4.8, current_song: 'Tempo Perdido' },
-  { id: 'roda-das-7', name: 'Roda das 7', main_genre: 'Pagode', rating: 4.7, current_song: 'Deixa Acontecer' },
-];
-
 const SAMPLE_MESSAGES = [
-  { id: 'm1', author: 'PALCO', content: 'Bem-vindo à sala. Escolha, peça, vote e participe.' },
-  { id: 'm2', author: 'Mesa 4', content: 'Toca Evidências!' },
+  { id: 'm1', author: 'PALCO', content: 'Entre na sua conta para conversar e apoiar o artista em tempo real.' },
 ];
 
 const VOTE_OPTIONS = [
@@ -40,22 +27,6 @@ const VOTE_OPTIONS = [
   ['repertoire', 'Melhor repertório'],
   ['presence', 'Presença de palco'],
 ];
-
-function saveGuestInteraction(payload) {
-  const key = '@palco/public_interactions';
-  const current = JSON.parse(localStorage.getItem(key) || '[]');
-  const next = [
-    {
-      id: crypto.randomUUID(),
-      created_at: new Date().toISOString(),
-      ...payload,
-    },
-    ...current,
-  ].slice(0, 30);
-
-  localStorage.setItem(key, JSON.stringify(next));
-  return next[0];
-}
 
 function ArtistAvatar({ artist, size = 'md' }) {
   const sizeClass = size === 'lg' ? 'h-20 w-20 text-3xl' : 'h-12 w-12 text-lg';
@@ -78,7 +49,7 @@ function ArtistSelectionScreen({ room, artists, onSelect }) {
         <div className="mb-6 flex items-center justify-between gap-3">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.22em] text-palco-gold">PALCO</p>
-            <h1 className="mt-2 font-display text-3xl font-black">{room?.name || FALLBACK_ROOM.name}</h1>
+            <h1 className="mt-2 font-display text-3xl font-black">{room?.name || 'Sala PALCO'}</h1>
           </div>
           <Badge variant="live" pulse>{artists.length} ao vivo</Badge>
         </div>
@@ -86,8 +57,13 @@ function ArtistSelectionScreen({ room, artists, onSelect }) {
           Escolha o cantor. Depois a live abre com áudio, vídeo, chat, pedido de música, gorjeta e votação.
         </p>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          {artists.map((artist) => (
+        {artists.length === 0 ? (
+          <div className="rounded-2xl border border-white/10 bg-palco-card p-8 text-center text-palco-text-muted">
+            Nenhum artista esta ao vivo nesta sala agora.
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {artists.map((artist) => (
             <button
               key={artist.id}
               type="button"
@@ -105,8 +81,9 @@ function ArtistSelectionScreen({ room, artists, onSelect }) {
                 </span>
               </span>
             </button>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </main>
   );
@@ -217,6 +194,7 @@ function InteractionPanel({
   onVote,
   targetLabel,
   isAuthenticated,
+  loginUrl,
 }) {
   return (
     <section className="rounded-2xl border border-white/10 bg-black/60 p-4 shadow-2xl backdrop-blur">
@@ -245,6 +223,12 @@ function InteractionPanel({
         disabled={submitting}
         maxLength={80}
       />
+
+      {!isAuthenticated && (
+        <div className="mt-4 rounded-xl border border-palco-gold/25 bg-palco-gold/10 px-4 py-3 text-sm text-palco-text-muted">
+          A live e publica. Para pedir, votar, conversar ou enviar gorjeta, entre na sua conta PALCO.
+        </div>
+      )}
 
       {feedback && (
         <div className={`mt-4 rounded-xl border px-4 py-3 text-sm ${
@@ -281,10 +265,10 @@ function InteractionPanel({
             disabled={submitting}
             className="w-full rounded-xl bg-palco-gold px-5 py-3 text-sm font-black text-palco-black transition hover:bg-palco-gold-light disabled:opacity-60"
           >
-            {submitting ? 'Enviando...' : `Pedir para ${targetLabel}`}
+            {submitting ? 'Enviando...' : isAuthenticated ? `Pedir para ${targetLabel}` : 'Entrar para pedir musica'}
           </button>
           {!isAuthenticated && (
-            <Link to="/login" className="block text-center text-xs font-bold text-palco-gold">
+            <Link to={loginUrl} className="block text-center text-xs font-bold text-palco-gold">
               Entrar para enviar direto ao artista
             </Link>
           )}
@@ -305,7 +289,7 @@ function InteractionPanel({
             type="submit"
             className="w-full rounded-xl bg-palco-gold px-5 py-3 text-sm font-black text-palco-black transition hover:bg-palco-gold-light"
           >
-            Preparar gorjeta
+            {isAuthenticated ? 'Enviar gorjeta' : 'Entrar para enviar gorjeta'}
           </button>
         </form>
       )}
@@ -334,8 +318,10 @@ function InteractionPanel({
 export default function PublicInteractionPage() {
   const { roomId } = useParams();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const { isAuthenticated, profile } = useAuth();
   const [room, setRoom] = useState(null);
+  const [loadError, setLoadError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeAction, setActiveAction] = useState('request');
   const [guestName, setGuestName] = useState('');
@@ -344,8 +330,8 @@ export default function PublicInteractionPage() {
   const [amount, setAmount] = useState(10);
   const [tipMessage, setTipMessage] = useState('');
   const [chatMessage, setChatMessage] = useState('');
-  const [messages, setMessages] = useState(SAMPLE_MESSAGES);
-  const [votes, setVotes] = useState({ voice: 42, repertoire: 31, presence: 27 });
+  const [messages] = useState(SAMPLE_MESSAGES);
+  const [votes] = useState({ voice: 0, repertoire: 0, presence: 0 });
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState(null);
   const [selectedArtistId, setSelectedArtistId] = useState(searchParams.get('artist') || null);
@@ -357,11 +343,10 @@ export default function PublicInteractionPage() {
     async function loadRoom() {
       try {
         const { data, error } = await getRoomById(roomId);
-        if (!cancelled) {
-          setRoom(error || !data ? { ...FALLBACK_ROOM, id: roomId || FALLBACK_ROOM.id } : data);
-        }
-      } catch {
-        if (!cancelled) setRoom({ ...FALLBACK_ROOM, id: roomId || FALLBACK_ROOM.id });
+        if (error || !data) throw error || new Error('Sala nao encontrada');
+        if (!cancelled) setRoom(data);
+      } catch (err) {
+        if (!cancelled) setLoadError(err.message || 'Sala indisponivel');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -375,17 +360,26 @@ export default function PublicInteractionPage() {
   }, [roomId]);
 
   const availableArtists = useMemo(() => {
-    const artists = getActiveArtists(room);
-    return artists.length > 0 ? artists : FALLBACK_ARTISTS;
+    return getActiveArtists(room);
   }, [room]);
 
   const selectedArtist = selectedArtistId
     ? availableArtists.find((artist) => artist.id === selectedArtistId) || null
     : null;
-  const artistId = selectedArtist?.id || 'ambiente';
+  const artistId = selectedArtist?.id || null;
   const displayName = sanitizeText(guestName) || profile?.name || 'Você';
-  const roomLabel = room?.name || FALLBACK_ROOM.name;
+  const roomLabel = room?.name || 'Sala PALCO';
   const targetLabel = selectedArtist?.name || 'Artista PALCO';
+  const realRoomPath = selectedArtist?.id
+    ? `/room/${roomId}?artist=${encodeURIComponent(selectedArtist.id)}`
+    : `/room/${roomId}`;
+  const loginUrl = getLoginUrl(realRoomPath);
+
+  useEffect(() => {
+    if (isAuthenticated && selectedArtist?.id) {
+      navigate(realRoomPath, { replace: true });
+    }
+  }, [isAuthenticated, navigate, realRoomPath, selectedArtist?.id]);
 
   const listenerMedia = useRoomMediaStream({
     roomId: room?.id || roomId,
@@ -410,6 +404,11 @@ export default function PublicInteractionPage() {
     event.preventDefault();
     setFeedback(null);
 
+    if (!isAuthenticated) {
+      navigate(loginUrl);
+      return;
+    }
+
     const titleValidation = validateSongTitle(songTitle);
     if (!titleValidation.valid) {
       setFeedback({ type: 'error', message: titleValidation.error });
@@ -430,40 +429,17 @@ export default function PublicInteractionPage() {
 
     setSubmitting(true);
     try {
-      if (isAuthenticated && profile?.role === 'listener' && room?.id !== 'demo-palco') {
-        const { error } = await createSongRequest({
-          roomId: room.id,
-          targetArtistId: artistId,
-          songTitle: titleValidation.sanitized,
-          bountyValue: Number(amount),
-          dedication: dedicationValidation.sanitized,
-        });
+      const { error } = await createSongRequest({
+        roomId: room.id,
+        targetArtistId: artistId,
+        songTitle: titleValidation.sanitized,
+        bountyValue: Number(amount),
+        dedication: dedicationValidation.sanitized,
+      });
 
-        if (error) throw new Error(error.message);
+      if (error) throw new Error(error.message);
 
-        setFeedback({ type: 'success', message: 'Pedido enviado para a fila do artista.' });
-      } else {
-        saveGuestInteraction({
-          type: 'song_request',
-          room_id: room?.id || roomId,
-          target_artist_id: artistId,
-          target_artist_name: targetLabel,
-          guest_name: displayName,
-          song_title: titleValidation.sanitized,
-          bounty_value: Number(amount),
-          dedication: dedicationValidation.sanitized,
-        });
-        setFeedback({ type: 'success', message: 'Pedido preparado. Entre para enviar direto ao artista.' });
-      }
-
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          author: displayName,
-          content: `Pediu "${titleValidation.sanitized}" para ${targetLabel} por R$ ${Number(amount).toFixed(2)}.`,
-        },
-      ]);
+      setFeedback({ type: 'success', message: 'Pedido enviado para a fila do artista.' });
       setSongTitle('');
       setDedication('');
     } catch (err) {
@@ -475,72 +451,18 @@ export default function PublicInteractionPage() {
 
   function handleTipSubmit(event) {
     event.preventDefault();
-    setFeedback(null);
-
-    const amountValidation = validateBountyValue(amount);
-    if (!amountValidation.valid) {
-      setFeedback({ type: 'error', message: amountValidation.error });
-      return;
-    }
-
-    const cleanMessage = sanitizeText(tipMessage);
-    saveGuestInteraction({
-      type: 'tip',
-      room_id: room?.id || roomId,
-      target_artist_id: artistId,
-      target_artist_name: targetLabel,
-      guest_name: displayName,
-      amount: Number(amount),
-      message: cleanMessage,
-    });
-
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        author: displayName,
-        content: `Enviou intenção de gorjeta de R$ ${Number(amount).toFixed(2)} para ${targetLabel}.`,
-      },
-    ]);
-    setTipMessage('');
-    setFeedback({ type: 'success', message: 'Gorjeta preparada. A próxima etapa é ligar o PIX público.' });
+    navigate(isAuthenticated ? realRoomPath : loginUrl);
   }
 
   function handleVote(option, label) {
-    setVotes((prev) => ({ ...prev, [option]: prev[option] + 1 }));
-    saveGuestInteraction({
-      type: 'vote',
-      room_id: room?.id || roomId,
-      target_artist_id: artistId,
-      target_artist_name: targetLabel,
-      guest_name: displayName,
-      vote: option,
-    });
-    setMessages((prev) => [
-      ...prev,
-      { id: crypto.randomUUID(), author: displayName, content: `Votou em "${label}" para ${targetLabel}.` },
-    ]);
-    setFeedback({ type: 'success', message: `Voto registrado para ${targetLabel}.` });
+    void option;
+    void label;
+    navigate(isAuthenticated ? realRoomPath : loginUrl);
   }
 
   function handleChatSubmit(event) {
     event.preventDefault();
-    const cleanMessage = sanitizeText(chatMessage);
-    if (!cleanMessage) return;
-
-    setMessages((prev) => [
-      ...prev,
-      { id: crypto.randomUUID(), author: displayName, content: cleanMessage },
-    ]);
-    saveGuestInteraction({
-      type: 'chat',
-      room_id: room?.id || roomId,
-      target_artist_id: artistId,
-      target_artist_name: targetLabel,
-      guest_name: displayName,
-      message: cleanMessage,
-    });
-    setChatMessage('');
+    navigate(isAuthenticated ? realRoomPath : loginUrl);
   }
 
   if (loading) {
@@ -548,6 +470,21 @@ export default function PublicInteractionPage() {
       <div className="flex min-h-screen items-center justify-center bg-palco-black">
         <Spinner size="lg" />
       </div>
+    );
+  }
+
+  if (loadError || !room) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-palco-black px-4 text-white">
+        <section className="w-full max-w-md rounded-2xl border border-white/10 bg-palco-card p-6 text-center">
+          <Badge variant="default">Sala indisponivel</Badge>
+          <h1 className="mt-4 font-display text-2xl font-black">Esta live nao esta disponivel</h1>
+          <p className="mt-2 text-sm text-palco-text-muted">{loadError || 'Confira o QR Code e tente novamente.'}</p>
+          <Link to="/rooms" className="mt-5 inline-flex rounded-xl bg-palco-gold px-5 py-3 text-sm font-black text-palco-black">
+            Ver salas ao vivo
+          </Link>
+        </section>
+      </main>
     );
   }
 
@@ -639,6 +576,7 @@ export default function PublicInteractionPage() {
               onVote={handleVote}
               targetLabel={targetLabel}
               isAuthenticated={isAuthenticated}
+              loginUrl={loginUrl}
             />
           </div>
         </div>
@@ -683,6 +621,7 @@ export default function PublicInteractionPage() {
           onVote={handleVote}
           targetLabel={targetLabel}
           isAuthenticated={isAuthenticated}
+          loginUrl={loginUrl}
         />
       </div>
     </main>

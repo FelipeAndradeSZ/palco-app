@@ -1,19 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { sendMessage } from './chatService';
 
-function shouldFallbackToLegacy(error) {
-  if (!error) return false;
-  const message = `${error.message || ''} ${error.details || ''}`.toLowerCase();
-  return (
-    message.includes('target_artist_id') ||
-    message.includes('request_source') ||
-    message.includes('guest_name') ||
-    message.includes('dedication') ||
-    message.includes('schema cache') ||
-    message.includes('could not find')
-  );
-}
-
 function shouldFallbackTipRpc(error) {
   if (!error) return false;
   const message = `${error.message || ''} ${error.details || ''}`.toLowerCase();
@@ -29,11 +16,6 @@ const REQUEST_SELECT = `
   *,
   requester:profiles!song_requests_requester_id_fkey(name, avatar_url),
   target_artist:profiles!song_requests_target_artist_id_fkey(id, name, avatar_url)
-`;
-
-const LEGACY_REQUEST_SELECT = `
-  *,
-  requester:profiles!song_requests_requester_id_fkey(name, avatar_url)
 `;
 
 function buildRequestAlert(songTitle, bountyValue, dedication) {
@@ -76,30 +58,9 @@ export async function createSongRequest({
 
   if (!enhanced.error) {
     await notifyRequest(roomId, user.id, payload.song_title, payload.bounty_value, payload.dedication, targetArtistId);
-    return enhanced;
   }
 
-  if (!shouldFallbackToLegacy(enhanced.error)) return enhanced;
-
-  const legacyPayload = {
-    room_id: payload.room_id,
-    requester_id: payload.requester_id,
-    song_title: payload.song_title,
-    bounty_value: payload.bounty_value,
-    status: payload.status,
-  };
-
-  const legacy = await supabase
-    .from('song_requests')
-    .insert(legacyPayload)
-    .select()
-    .single();
-
-  if (!legacy.error) {
-    await notifyRequest(roomId, user.id, payload.song_title, payload.bounty_value, payload.dedication, targetArtistId);
-  }
-
-  return legacy;
+  return enhanced;
 }
 
 export async function sendTip(roomId, amount, message, targetArtistId = null) {
@@ -167,25 +128,12 @@ export async function getActiveRequests(roomId, targetArtistId = null) {
     .in('status', ['pending', 'accepted', 'playing'])
     .order('created_at', { ascending: true });
 
-  if (!enhanced.error) {
-    const data = targetArtistId
-      ? enhanced.data.filter((request) => !request.target_artist_id || request.target_artist_id === targetArtistId)
-      : enhanced.data;
-    return { data, error: null };
-  }
+  if (enhanced.error) return { data: null, error: enhanced.error };
 
-  if (!shouldFallbackToLegacy(enhanced.error)) {
-    return { data: null, error: enhanced.error };
-  }
-
-  const legacy = await supabase
-    .from('song_requests')
-    .select(LEGACY_REQUEST_SELECT)
-    .eq('room_id', roomId)
-    .in('status', ['pending', 'accepted', 'playing'])
-    .order('created_at', { ascending: true });
-
-  return { data: legacy.data || [], error: legacy.error };
+  const data = targetArtistId
+    ? enhanced.data.filter((request) => !request.target_artist_id || request.target_artist_id === targetArtistId)
+    : enhanced.data;
+  return { data, error: null };
 }
 
 export async function updateRequestStatus(requestId, status, artistId = null) {
@@ -217,14 +165,24 @@ export async function updateRequestStatus(requestId, status, artistId = null) {
     return { data, error };
   }
 
-  // Demais status (como cancelled ou completed) usam update direto na tabela
-  const { data, error } = await supabase
-    .from('song_requests')
-    .update({ status })
-    .eq('id', requestId)
-    .select()
-    .single();
+  if (status === 'completed') {
+    const { data, error } = await supabase.rpc('complete_song_request', {
+      p_request_id: requestId,
+    });
 
-  return { data, error };
+    return { data, error };
+  }
+
+  if (status === 'cancelled') {
+    const { data, error } = await supabase.rpc('cancel_song_request', {
+      p_request_id: requestId,
+    });
+
+    return { data, error };
+  }
+
+  return {
+    data: null,
+    error: new Error('Transicao de pedido nao suportada.'),
+  };
 }
-

@@ -7,12 +7,14 @@
  * @param {string[]}        roles    - Roles permitidos (ex: ['artist', 'venue'])
  */
 
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { getLoginUrl } from '../../lib/navigation';
 import Spinner from '../ui/Spinner';
 
 export default function ProtectedRoute({ children, roles }) {
   const { isAuthenticated, loading, profile } = useAuth();
+  const location = useLocation();
 
   // Verificação de sessão em andamento
   if (loading) {
@@ -25,7 +27,7 @@ export default function ProtectedRoute({ children, roles }) {
 
   // Não autenticado → login
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to={getLoginUrl(`${location.pathname}${location.search}`)} replace />;
   }
 
   // Role não autorizado → home

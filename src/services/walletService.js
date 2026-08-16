@@ -105,26 +105,3 @@ export async function getTransactions(profileId) {
   return { data, error };
 }
 
-/**
- * Simula a aprovação de uma solicitação de saque (Testes/Admin).
- */
-export async function simulateApproveWithdrawal(requestId) {
-  const { data, error } = await supabase.rpc('simulate_approve_withdrawal', {
-    p_request_id: requestId,
-  });
-
-  return { data, error };
-}
-
-/**
- * Simula a recusa de uma solicitação de saque (Testes/Admin).
- */
-export async function simulateRejectWithdrawal(requestId, reason) {
-  const { data, error } = await supabase.rpc('simulate_reject_withdrawal', {
-    p_request_id: requestId,
-    p_reason: reason,
-  });
-
-  return { data, error };
-}
-

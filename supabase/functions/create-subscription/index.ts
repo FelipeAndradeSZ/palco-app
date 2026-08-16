@@ -16,8 +16,26 @@ const corsHeaders = {
 
 function safeReturnPath(value: unknown) {
   if (typeof value !== 'string') return '/tv'
-  if (!value.startsWith('/') || value.startsWith('//')) return '/tv'
+  if (!value.startsWith('/') || value.startsWith('//') || value.includes('\\')) return '/tv'
   return value
+}
+
+function getRedirectOrigin(req: Request) {
+  const siteUrl = Deno.env.get('SITE_URL')
+  if (!siteUrl) throw new Error('SITE_URL nao configurada no Supabase')
+
+  const siteOrigin = new URL(siteUrl).origin
+  const allowedOrigins = new Set([
+    siteOrigin,
+    ...(Deno.env.get('ALLOWED_ORIGINS') || '')
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .map((value) => new URL(value).origin),
+  ])
+  const requestOrigin = req.headers.get('origin')
+
+  return requestOrigin && allowedOrigins.has(requestOrigin) ? requestOrigin : siteOrigin
 }
 
 function priceForPlan(planTier: string) {
@@ -40,6 +58,16 @@ serve(async (req) => {
     const { data: authData, error: authError } = await supabase.auth.getUser()
     if (authError || !authData.user) throw new Error('Usuario nao autenticado')
 
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', authData.user.id)
+      .single()
+
+    if (profileError || profile?.role !== 'venue') {
+      throw new Error('Apenas estabelecimentos podem assinar o Plano Ambiente')
+    }
+
     const { planTier = 'basic', returnTo } = await req.json()
     if (!['basic', 'premium'].includes(planTier)) throw new Error('Plano invalido')
 
@@ -47,7 +75,7 @@ serve(async (req) => {
     if (!priceId) throw new Error(`Preco Stripe nao configurado para o plano ${planTier}`)
 
     const returnPath = safeReturnPath(returnTo)
-    const origin = req.headers.get('origin') || Deno.env.get('SITE_URL') || 'http://localhost:5173'
+    const origin = getRedirectOrigin(req)
 
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',

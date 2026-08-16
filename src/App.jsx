@@ -9,31 +9,42 @@
  * - /tv         → TVModePage (protegida, role: venue)
  */
 
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import AppShell from './components/layout/AppShell';
 import ProtectedRoute from './components/layout/ProtectedRoute';
+import Spinner from './components/ui/Spinner';
 
 // Pages
-import HomePage from './pages/HomePage';
-import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
-import ArtistDashboardPage from './pages/ArtistDashboardPage';
-import TVModePage from './pages/TVModePage';
-import RoomPage from './pages/RoomPage';
-import RoomsPage from './pages/RoomsPage';
-import PublicInteractionPage from './pages/PublicInteractionPage';
-import ProfilePage from './pages/ProfilePage';
-import WalletReturnPage from './pages/WalletReturnPage';
-import AdminCuratorPage from './pages/AdminCuratorPage';
-import MarketplacePage from './pages/MarketplacePage';
+const HomePage = lazy(() => import('./pages/HomePage'));
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const RegisterPage = lazy(() => import('./pages/RegisterPage'));
+const ArtistDashboardPage = lazy(() => import('./pages/ArtistDashboardPage'));
+const TVModePage = lazy(() => import('./pages/TVModePage'));
+const RoomPage = lazy(() => import('./pages/RoomPage'));
+const RoomsPage = lazy(() => import('./pages/RoomsPage'));
+const PublicInteractionPage = lazy(() => import('./pages/PublicInteractionPage'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const WalletReturnPage = lazy(() => import('./pages/WalletReturnPage'));
+const AdminCuratorPage = lazy(() => import('./pages/AdminCuratorPage'));
+const MarketplacePage = lazy(() => import('./pages/MarketplacePage'));
 import OnboardingModal from './components/features/auth/OnboardingModal';
+
+function RouteFallback() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-palco-black">
+      <Spinner size="lg" />
+    </div>
+  );
+}
 
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Routes>
+        <Suspense fallback={<RouteFallback />}>
+          <Routes>
           {/* Rotas com AppShell (header + layout) */}
           <Route
             path="/"
@@ -150,7 +161,8 @@ export default function App() {
               </AppShell>
             }
           />
-        </Routes>
+          </Routes>
+        </Suspense>
         <OnboardingModal />
       </AuthProvider>
     </BrowserRouter>

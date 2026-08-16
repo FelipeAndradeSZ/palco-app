@@ -72,7 +72,7 @@ export async function getAdminWithdrawals() {
 }
 
 export async function approveWithdrawal(requestId) {
-  const { data, error } = await supabase.rpc('simulate_approve_withdrawal', {
+  const { data, error } = await supabase.rpc('complete_manual_withdrawal', {
     p_request_id: requestId,
   });
 
@@ -80,7 +80,7 @@ export async function approveWithdrawal(requestId) {
 }
 
 export async function rejectWithdrawal(requestId, reason) {
-  const { data, error } = await supabase.rpc('simulate_reject_withdrawal', {
+  const { data, error } = await supabase.rpc('reject_withdrawal', {
     p_request_id: requestId,
     p_reason: reason,
   });

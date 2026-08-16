@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import {
   approveWithdrawal,
@@ -38,7 +38,7 @@ export default function AdminCuratorPage() {
   const clientAdmin = isAdminUser(user);
   const canOpenAdmin = clientAdmin || serverAdmin;
 
-  async function loadAdminData() {
+  const loadAdminData = useCallback(async () => {
     setLoading(true);
     setFeedback(null);
 
@@ -56,7 +56,7 @@ export default function AdminCuratorPage() {
       ]);
 
       if (artistsResult.error) throw artistsResult.error;
-      if (withdrawalsResult.error && serverAdmin) throw withdrawalsResult.error;
+      if (withdrawalsResult.error && (clientAdmin || status.data)) throw withdrawalsResult.error;
 
       setArtists(artistsResult.data || []);
       setWithdrawals(withdrawalsResult.data || []);
@@ -68,13 +68,13 @@ export default function AdminCuratorPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [clientAdmin]);
 
   useEffect(() => {
     if (user?.id) {
       loadAdminData();
     }
-  }, [user?.id]);
+  }, [user?.id, loadAdminData]);
 
   const filteredArtists = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -125,7 +125,10 @@ export default function AdminCuratorPage() {
         : await rejectWithdrawal(request.id, reason);
 
       if (result.error) throw result.error;
-      setFeedback({ type: 'success', message: 'Saque atualizado.' });
+      setFeedback({
+        type: 'success',
+        message: action === 'approve' ? 'PIX confirmado como pago.' : 'Saque recusado e saldo devolvido ao artista.',
+      });
       await loadAdminData();
     } catch (err) {
       setFeedback({ type: 'error', message: err.message || 'Nao foi possivel processar o saque.' });
@@ -303,7 +306,7 @@ export default function AdminCuratorPage() {
                         loading={processingId === request.id}
                         onClick={() => handleWithdrawal(request, 'approve')}
                       >
-                        Aprovar
+                        Confirmar PIX pago
                       </Button>
                     </div>
                   )}

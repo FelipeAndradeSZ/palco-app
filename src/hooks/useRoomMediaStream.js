@@ -1,11 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 
+const TURN_URL = import.meta.env.VITE_TURN_URL;
+const TURN_USERNAME = import.meta.env.VITE_TURN_USERNAME;
+const TURN_CREDENTIAL = import.meta.env.VITE_TURN_CREDENTIAL;
+
 const RTC_CONFIG = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:global.stun.twilio.com:3478' },
+    ...(TURN_URL && TURN_USERNAME && TURN_CREDENTIAL
+      ? [{
+          urls: TURN_URL.split(',').map((url) => url.trim()).filter(Boolean),
+          username: TURN_USERNAME,
+          credential: TURN_CREDENTIAL,
+        }]
+      : []),
   ],
+  iceCandidatePoolSize: 4,
 };
 
 function getListenerId() {
@@ -104,6 +116,7 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
     }
 
     let cancelled = false;
+    const iceQueues = iceQueuesRef.current;
     const channel = supabase.channel(`media:${roomId}:${artistId}`);
     channelRef.current = channel;
 
@@ -127,16 +140,19 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
 
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
+          echoCancellation: true,
+          noiseSuppression: true,
           autoGainControl: false,
-          latency: 0,
-          channelCount: 2,
+          channelCount: 1,
         },
         video: {
           width: { ideal: 1280 },
           height: { ideal: 720 },
         },
+      });
+
+      stream.getAudioTracks().forEach((track) => {
+        track.contentHint = 'music';
       });
 
       localStreamRef.current = stream;
@@ -189,7 +205,7 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
         stream.getTracks().forEach((track) => peer.addTrack(track, stream));
 
         // Flush queued candidates
-        const queue = iceQueuesRef.current.get(payload.listenerId) || [];
+        const queue = iceQueues.get(payload.listenerId) || [];
         for (const cand of queue) {
           try {
             await peer.addIceCandidate(new RTCIceCandidate(cand));
@@ -197,7 +213,7 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
             console.error('[PALCO media] erro ao esvaziar fila de cand do listener:', err);
           }
         }
-        iceQueuesRef.current.delete(payload.listenerId);
+        iceQueues.delete(payload.listenerId);
 
         const answer = await peer.createAnswer();
         const optimizedAnswer = new RTCSessionDescription({
@@ -331,7 +347,7 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
           setStatus('live');
 
           // Flush queued candidates
-          const queue = iceQueuesRef.current.get('artist') || [];
+          const queue = iceQueues.get('artist') || [];
           for (const cand of queue) {
             try {
               await listenerPeerRef.current?.addIceCandidate(new RTCIceCandidate(cand));
@@ -339,7 +355,7 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
               console.error('[PALCO media] erro ao esvaziar fila de cand do artista:', err);
             }
           }
-          iceQueuesRef.current.delete('artist');
+          iceQueues.delete('artist');
         } catch (err) {
           console.error('[PALCO media] erro ao receber resposta:', err);
           setError('Não foi possível receber a transmissão.');
@@ -358,9 +374,9 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
             if (peer && peer.remoteDescription) {
               await peer.addIceCandidate(new RTCIceCandidate(candidate));
             } else {
-              const queue = iceQueuesRef.current.get('artist') || [];
+              const queue = iceQueues.get('artist') || [];
               queue.push(candidate);
-              iceQueuesRef.current.set('artist', queue);
+              iceQueues.set('artist', queue);
             }
           }
 
@@ -369,9 +385,9 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
             if (peer && peer.remoteDescription) {
               await peer.addIceCandidate(new RTCIceCandidate(candidate));
             } else {
-              const queue = iceQueuesRef.current.get(payload.listenerId) || [];
+              const queue = iceQueues.get(payload.listenerId) || [];
               queue.push(candidate);
-              iceQueuesRef.current.set(payload.listenerId, queue);
+              iceQueues.set(payload.listenerId, queue);
             }
           }
         } catch (err) {
@@ -416,7 +432,7 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
       closeAllPeers();
       stopLocalStream();
       clearRemoteStream();
-      iceQueuesRef.current.clear();
+      iceQueues.clear();
       supabase.removeChannel(channel);
       channelRef.current = null;
     };

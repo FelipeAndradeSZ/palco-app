@@ -44,7 +44,7 @@ serve(async (req) => {
 
     const session = await stripe.checkout.sessions.retrieve(sessionId)
     const userId = session.client_reference_id || session.metadata?.userId
-    const amount = Number(session.metadata?.amount || 0)
+    const amount = Number(session.amount_total || 0) / 100
 
     if (userId !== authData.user.id) {
       throw new Error('Esta recarga pertence a outro usuario')
@@ -52,6 +52,14 @@ serve(async (req) => {
 
     if (session.payment_status !== 'paid') {
       throw new Error('Pagamento ainda nao confirmado')
+    }
+
+    if (session.mode !== 'payment' || session.currency !== 'brl') {
+      throw new Error('Sessao de pagamento invalida')
+    }
+
+    if (!Number.isFinite(amount) || amount < 5 || amount > 5000) {
+      throw new Error('Valor confirmado fora dos limites permitidos')
     }
 
     const supabaseAdmin = createClient(

@@ -3,11 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { confirmCheckoutSession } from '../services/walletService';
 import { useAuth } from '../hooks/useAuth';
 import Spinner from '../components/ui/Spinner';
-
-function safeReturnPath(value) {
-  if (!value || !value.startsWith('/') || value.startsWith('//')) return '/rooms';
-  return value;
-}
+import { getSafeReturnPath } from '../lib/navigation';
 
 export default function WalletReturnPage() {
   const [searchParams] = useSearchParams();
@@ -15,7 +11,7 @@ export default function WalletReturnPage() {
   const { refreshProfile } = useAuth();
   const [status, setStatus] = useState('loading');
   const [message, setMessage] = useState('Confirmando pagamento...');
-  const returnTo = safeReturnPath(searchParams.get('return_to'));
+  const returnTo = getSafeReturnPath(searchParams.get('return_to'), '/rooms');
 
   useEffect(() => {
     let cancelled = false;
@@ -72,7 +68,7 @@ export default function WalletReturnPage() {
           </div>
         )}
         <h1 className="mt-5 font-display text-2xl font-black text-palco-text">
-          {status === 'success' ? 'Pagamento confirmado' : 'Confirmando saldo'}
+          {status === 'success' ? 'Pagamento confirmado' : status === 'error' ? 'Falha ao confirmar pagamento' : 'Confirmando saldo'}
         </h1>
         <p className="mt-3 text-sm leading-6 text-palco-text-muted">{message}</p>
         <Link

@@ -703,6 +703,9 @@ export default function RoomPage() {
     : null;
 
   const [incomingLike, setIncomingLike] = useState(null);
+  const handleIncomingLike = useCallback((payload) => {
+    setIncomingLike({ x: payload.x, y: payload.y, timestamp: Date.now() });
+  }, []);
 
   const {
     messages,
@@ -718,9 +721,7 @@ export default function RoomPage() {
   } = useRoomRealtime(roomId, {
     onRoomUpdate: handleRoomUpdate,
     targetArtistId: selectedArtist?.id || null,
-    onLikeReceived: (payload) => {
-      setIncomingLike({ x: payload.x, y: payload.y, timestamp: Date.now() });
-    },
+    onLikeReceived: handleIncomingLike,
   });
 
   const listenerMedia = useRoomMediaStream({

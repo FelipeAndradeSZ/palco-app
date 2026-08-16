@@ -5,25 +5,28 @@
  */
 
 import { useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import LoginForm from '../components/features/auth/LoginForm';
+import { getSafeReturnPath } from '../lib/navigation';
 
 export default function LoginPage() {
   const { signIn, loading, error, isAuthenticated } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const returnTo = getSafeReturnPath(searchParams.get('returnTo'));
 
   // Redirect se já logado
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/', { replace: true });
+      navigate(returnTo, { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, navigate, returnTo]);
 
   async function handleLogin(credentials) {
     const result = await signIn(credentials);
     if (!result.error) {
-      navigate('/', { replace: true });
+      navigate(returnTo, { replace: true });
     }
   }
 
@@ -51,6 +54,7 @@ export default function LoginPage() {
             onSubmit={handleLogin}
             loading={loading}
             error={error}
+            returnTo={returnTo}
           />
         </div>
 
@@ -58,7 +62,7 @@ export default function LoginPage() {
         <p className="text-center mt-6 text-palco-text-muted text-sm">
           Não tem conta?{' '}
           <Link
-            to="/register"
+            to={`/register?returnTo=${encodeURIComponent(returnTo)}`}
             className="text-palco-gold hover:text-palco-gold-light font-medium transition-colors"
           >
             Cadastre-se grátis

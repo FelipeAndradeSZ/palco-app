@@ -1,11 +1,10 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useCallback, useMemo, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useRooms } from '../hooks/useRooms';
 import { useRoomRealtime } from '../hooks/useRoomRealtime';
 import { useRoomMediaStream } from '../hooks/useRoomMediaStream';
 import { updateRoomArtist } from '../services/roomService';
-import { clearArtistChat } from '../services/chatService';
 import { acceptBattle, cancelBattle, finishBattle, startBattleVoting } from '../services/battleService';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
@@ -16,9 +15,11 @@ import Alert from '../components/ui/Alert';
 import ArtistRequestQueue from '../components/features/bounty/ArtistRequestQueue';
 import ChatBox from '../components/features/chat/ChatBox';
 import LocalCamera from '../components/features/video/LocalCamera';
+import LiveAlertOverlay from '../components/features/tv/LiveAlertOverlay';
 import { QUALITY_TIER_LABELS } from '../lib/constants';
 import { getActiveArtists, roomHasArtist } from '../lib/roomArtists';
 import { getWallet, requestWithdrawal, getWithdrawalRequests, getTransactions } from '../services/walletService';
+import { getBookingRequests, updateBookingStatus } from '../services/venueService';
 
 function ArtistBattleControls({ battles, profileId, onChanged }) {
   const [processingId, setProcessingId] = useState(null);
@@ -60,7 +61,7 @@ function ArtistBattleControls({ battles, profileId, onChanged }) {
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {battle.status === 'pending' && (
+                  {battle.status === 'pending' && battle.opponent_artist_id === profileId && (
                     <Button
                       size="sm"
                       onClick={() => runAction(battle.id, acceptBattle)}
@@ -69,7 +70,7 @@ function ArtistBattleControls({ battles, profileId, onChanged }) {
                       Aceitar
                     </Button>
                   )}
-                  {(battle.status === 'pending' || battle.status === 'active') && (
+                  {battle.status === 'active' && (
                     <Button
                       size="sm"
                       variant="secondary"
@@ -115,6 +116,7 @@ export default function ArtistDashboardPage() {
   const { rooms, loading: roomsLoading, refetch: refetchRooms } = useRooms();
   const [selectedRoomId, setSelectedRoomId] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [liveFeedback, setLiveFeedback] = useState(null);
 
   // Abas do Painel
   const [activeTab, setActiveTab] = useState('live');
@@ -128,23 +130,29 @@ export default function ArtistDashboardPage() {
   const [withdrawalAmount, setWithdrawalAmount] = useState('');
   const [withdrawalPixKey, setWithdrawalPixKey] = useState('');
   const [walletFeedback, setWalletFeedback] = useState(null);
+  const [bookings, setBookings] = useState([]);
+  const [bookingsLoading, setBookingsLoading] = useState(false);
+  const [bookingProcessingId, setBookingProcessingId] = useState(null);
+  const [bookingFeedback, setBookingFeedback] = useState(null);
 
   const artistDetails = profile?.artist_details?.[0] || profile?.artist_details || {};
+  const profileId = profile?.id;
+  const artistPixKey = artistDetails.pix_key || '';
   const tierLabel = QUALITY_TIER_LABELS[artistDetails.quality_tier] || 'Bronze';
 
-  const loadWalletData = async () => {
-    if (!profile?.id) return;
+  const loadWalletData = useCallback(async () => {
+    if (!profileId) return;
     setFetchingWallet(true);
     try {
       const [walletRes, transRes, drawRes] = await Promise.all([
-        getWallet(profile.id),
-        getTransactions(profile.id),
-        getWithdrawalRequests(profile.id),
+        getWallet(profileId),
+        getTransactions(profileId),
+        getWithdrawalRequests(profileId),
       ]);
 
       if (walletRes.data) {
         setWallet(walletRes.data);
-        const savedPix = walletRes.data.pix_key || artistDetails.pix_key || '';
+        const savedPix = walletRes.data.pix_key || artistPixKey;
         setWithdrawalPixKey((prev) => prev || savedPix);
       }
       if (transRes.data) setTransactions(transRes.data);
@@ -154,13 +162,49 @@ export default function ArtistDashboardPage() {
     } finally {
       setFetchingWallet(false);
     }
-  };
+  }, [artistPixKey, profileId]);
+
+  const loadBookings = useCallback(async () => {
+    if (!profileId) return;
+    setBookingsLoading(true);
+    try {
+      const { data, error } = await getBookingRequests(profileId, 'artist');
+      if (error) throw error;
+      setBookings(data || []);
+    } catch (err) {
+      setBookingFeedback({ type: 'error', message: err.message || 'Nao foi possivel carregar as contratacoes.' });
+    } finally {
+      setBookingsLoading(false);
+    }
+  }, [profileId]);
 
   useEffect(() => {
     if (profile?.id) {
       loadWalletData();
     }
-  }, [profile?.id, activeTab]);
+  }, [profile?.id, activeTab, loadWalletData]);
+
+  useEffect(() => {
+    if (activeTab === 'bookings') loadBookings();
+  }, [activeTab, loadBookings]);
+
+  const handleBookingStatus = async (requestId, status) => {
+    setBookingProcessingId(requestId);
+    setBookingFeedback(null);
+    try {
+      const { error } = await updateBookingStatus(requestId, status);
+      if (error) throw error;
+      setBookingFeedback({
+        type: 'success',
+        message: status === 'accepted' ? 'Contratacao aceita.' : 'Contratacao recusada.',
+      });
+      await loadBookings();
+    } catch (err) {
+      setBookingFeedback({ type: 'error', message: err.message || 'Nao foi possivel responder a contratacao.' });
+    } finally {
+      setBookingProcessingId(null);
+    }
+  };
 
   const handleWithdrawalSubmit = async (e) => {
     e.preventDefault();
@@ -205,7 +249,7 @@ export default function ArtistDashboardPage() {
 
   const activeRoomId = selectedRoomId || assignedRoomId;
   const activeRoom = rooms.find((room) => room.id === activeRoomId);
-  const { activeRequests, activeBattles, messages, isConnected, sendChatMessage } = useRoomRealtime(activeRoomId, {
+  const { activeRequests, activeBattles, messages, isConnected, sendChatMessage, tvAlerts } = useRoomRealtime(activeRoomId, {
     targetArtistId: profile?.id || null,
   });
   const mediaStream = useRoomMediaStream({
@@ -218,14 +262,14 @@ export default function ArtistDashboardPage() {
 
   const handleGoLive = async (roomId) => {
     setIsProcessing(true);
+    setLiveFeedback(null);
     try {
-      // Clear database chat history of this artist in this room for a fresh show
-      await clearArtistChat(roomId, profile.id);
       await updateRoomArtist(roomId, profile.id);
       setSelectedRoomId(roomId);
       await refetchRooms();
     } catch (err) {
       console.error('Erro ao entrar ao vivo', err);
+      setLiveFeedback({ type: 'error', message: err.message || 'Nao foi possivel entrar nesta sala.' });
     } finally {
       setIsProcessing(false);
     }
@@ -234,14 +278,14 @@ export default function ArtistDashboardPage() {
   const handleStopLive = async () => {
     if (!activeRoomId) return;
     setIsProcessing(true);
+    setLiveFeedback(null);
     try {
-      // Clear database chat history of this artist in this room on show end
-      await clearArtistChat(activeRoomId, profile.id);
-      await updateRoomArtist(activeRoomId, null, profile.id);
+      await updateRoomArtist(activeRoomId, null);
       setSelectedRoomId(null);
       await refetchRooms();
     } catch (err) {
       console.error('Erro ao sair do ar', err);
+      setLiveFeedback({ type: 'error', message: err.message || 'Nao foi possivel encerrar a transmissao.' });
     } finally {
       setIsProcessing(false);
     }
@@ -284,6 +328,12 @@ export default function ArtistDashboardPage() {
         </div>
       </div>
 
+      {liveFeedback && (
+        <div className="mb-5">
+          <Alert type={liveFeedback.type} message={liveFeedback.message} />
+        </div>
+      )}
+
       {/* Navegação por Abas (Tabs) */}
       <div className="mb-6 flex border-b border-palco-border">
         <button
@@ -307,6 +357,17 @@ export default function ArtistDashboardPage() {
           }`}
         >
           💼 Minha Carteira {wallet?.balance > 0 && `(R$ ${wallet.balance.toFixed(2)})`}
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('bookings')}
+          className={`border-b-2 px-4 pb-3 font-display text-sm font-bold transition-all ${
+            activeTab === 'bookings'
+              ? 'border-palco-gold text-palco-gold'
+              : 'border-transparent text-palco-text-muted hover:text-palco-text'
+          }`}
+        >
+          Contratacoes
         </button>
       </div>
 
@@ -371,13 +432,16 @@ export default function ArtistDashboardPage() {
                   </Button>
                 </div>
 
-                <LocalCamera
-                  isActive
-                  stream={mediaStream.localStream}
-                  status={mediaStream.status}
-                  error={mediaStream.error}
-                  artistName={profile?.name}
-                />
+                <div className="relative">
+                  <LocalCamera
+                    isActive
+                    stream={mediaStream.localStream}
+                    status={mediaStream.status}
+                    error={mediaStream.error}
+                    artistName={profile?.name}
+                  />
+                  <LiveAlertOverlay alerts={tvAlerts} />
+                </div>
                 <ArtistBattleControls
                   battles={activeBattles}
                   profileId={profile?.id}
@@ -710,6 +774,78 @@ export default function ArtistDashboardPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {activeTab === 'bookings' && (
+        <section className="space-y-4">
+          {bookingFeedback && (
+            <Alert
+              type={bookingFeedback.type}
+              message={bookingFeedback.message}
+              onClose={() => setBookingFeedback(null)}
+            />
+          )}
+
+          {bookingsLoading ? (
+            <div className="flex min-h-48 items-center justify-center">
+              <Spinner size="lg" />
+            </div>
+          ) : bookings.length === 0 ? (
+            <Card>
+              <div className="p-8 text-center text-sm text-palco-text-muted">
+                Nenhuma solicitacao de contratacao recebida.
+              </div>
+            </Card>
+          ) : (
+            bookings.map((request) => (
+              <Card key={request.id}>
+                <div className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-display text-lg font-black text-palco-text">
+                        {request.venue?.name || 'Estabelecimento PALCO'}
+                      </h3>
+                      <Badge variant={request.status === 'accepted' ? 'success' : request.status === 'declined' ? 'live' : 'gold'}>
+                        {request.status === 'pending' ? 'Pendente' : request.status === 'accepted' ? 'Aceita' : request.status === 'declined' ? 'Recusada' : 'Cancelada'}
+                      </Badge>
+                    </div>
+                    <p className="mt-2 text-sm text-palco-text-muted">
+                      {[request.city, request.state].filter(Boolean).join(' / ') || 'Local a combinar'}
+                      {request.event_date ? ` - ${new Date(request.event_date).toLocaleString('pt-BR')}` : ''}
+                    </p>
+                    {request.budget && (
+                      <p className="mt-1 text-sm font-bold text-palco-gold">
+                        Orcamento: R$ {Number(request.budget).toFixed(2)}
+                      </p>
+                    )}
+                    {request.message && (
+                      <p className="mt-3 max-w-3xl text-sm leading-6 text-palco-text">{request.message}</p>
+                    )}
+                  </div>
+                  {request.status === 'pending' && (
+                    <div className="flex shrink-0 gap-2">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        loading={bookingProcessingId === request.id}
+                        onClick={() => handleBookingStatus(request.id, 'declined')}
+                      >
+                        Recusar
+                      </Button>
+                      <Button
+                        size="sm"
+                        loading={bookingProcessingId === request.id}
+                        onClick={() => handleBookingStatus(request.id, 'accepted')}
+                      >
+                        Aceitar
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </Card>
+            ))
+          )}
+        </section>
       )}
     </div>
   );

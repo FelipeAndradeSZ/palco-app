@@ -13,7 +13,7 @@ import Button from '../../ui/Button';
 import Input from '../../ui/Input';
 import Alert from '../../ui/Alert';
 
-export default function RegisterForm({ onSubmit, loading, error }) {
+export default function RegisterForm({ onSubmit, loading, error, returnTo = '/' }) {
   const [form, setForm] = useState({
     email: '',
     password: '',
@@ -64,7 +64,7 @@ export default function RegisterForm({ onSubmit, loading, error }) {
 
   const handleOAuth = async (provider) => {
     // Agora o Google sempre vai abrir o modal de onboarding para usuários novos (sem role pendente injetada)
-    const { error } = await signInWithOAuth(provider);
+    const { error } = await signInWithOAuth(provider, returnTo);
     if (error) console.error('OAuth Error:', error);
   };
 

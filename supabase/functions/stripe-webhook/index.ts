@@ -15,9 +15,18 @@ function getSupabaseAdmin() {
 
 async function creditCheckoutSession(session: Stripe.Checkout.Session) {
   const userId = session.client_reference_id || session.metadata?.userId
-  const amount = Number(session.metadata?.amount || 0)
+  const amount = Number(session.amount_total || 0) / 100
 
-  if (!session.id || !userId || !Number.isFinite(amount) || amount <= 0) {
+  if (
+    session.mode !== 'payment' ||
+    session.payment_status !== 'paid' ||
+    session.currency !== 'brl' ||
+    !session.id ||
+    !userId ||
+    !Number.isFinite(amount) ||
+    amount < 5 ||
+    amount > 5000
+  ) {
     console.error('[PALCO stripe-webhook] Sessao sem dados suficientes', {
       sessionId: session.id,
       userId,
@@ -96,7 +105,7 @@ serve(async (req) => {
   try {
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object as Stripe.Checkout.Session
-      if (session.payment_status === 'paid') {
+      if (session.mode === 'payment' && session.payment_status === 'paid') {
         await creditCheckoutSession(session)
       }
     }

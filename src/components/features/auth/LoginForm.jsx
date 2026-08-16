@@ -12,7 +12,7 @@ import Button from '../../ui/Button';
 import Input from '../../ui/Input';
 import Alert from '../../ui/Alert';
 
-export default function LoginForm({ onSubmit, loading, error }) {
+export default function LoginForm({ onSubmit, loading, error, returnTo = '/' }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [validationErrors, setValidationErrors] = useState({});
@@ -33,7 +33,7 @@ export default function LoginForm({ onSubmit, loading, error }) {
   }
 
   const handleOAuth = async (provider) => {
-    const { error } = await signInWithOAuth(provider);
+    const { error } = await signInWithOAuth(provider, returnTo);
     if (error) console.error('OAuth Error:', error);
   };
 

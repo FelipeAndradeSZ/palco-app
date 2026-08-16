@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { searchArtists } from '../services/marketplaceService';
-import { createBookingRequest } from '../services/venueService';
+import { createBookingRequest, getBookingRequests, updateBookingStatus } from '../services/venueService';
 import { BRAZIL_REGIONS, MUSIC_GENRES, QUALITY_TIER_LABELS } from '../lib/constants';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
@@ -10,6 +10,8 @@ import Spinner from '../components/ui/Spinner';
 
 export default function MarketplacePage() {
   const { profile } = useAuth();
+  const profileId = profile?.id;
+  const profileRole = profile?.role;
   const [artists, setArtists] = useState([]);
   const [filters, setFilters] = useState({ genre: '', region: '', state: '', city: '' });
   const [loading, setLoading] = useState(true);
@@ -17,8 +19,9 @@ export default function MarketplacePage() {
   const [bookingLoadingId, setBookingLoadingId] = useState(null);
   const [bookingMessage, setBookingMessage] = useState('');
   const [feedback, setFeedback] = useState(null);
+  const [bookingRequests, setBookingRequests] = useState([]);
 
-  async function loadArtists(nextFilters = filters) {
+  const loadArtists = useCallback(async (nextFilters = {}) => {
     setLoading(true);
     try {
       const { data, error } = await searchArtists(nextFilters);
@@ -29,16 +32,28 @@ export default function MarketplacePage() {
     } finally {
       setLoading(false);
     }
-  }
-
-  useEffect(() => {
-    loadArtists();
   }, []);
 
+  const loadVenueBookings = useCallback(async () => {
+    if (profileRole !== 'venue' || !profileId) return;
+    const { data, error } = await getBookingRequests(profileId, 'venue');
+    if (error) {
+      setFeedback({ type: 'error', message: error.message || 'Nao foi possivel carregar suas solicitacoes.' });
+      return;
+    }
+    setBookingRequests(data || []);
+  }, [profileId, profileRole]);
+
+  useEffect(() => {
+    loadArtists(filters);
+  }, [filters, loadArtists]);
+
+  useEffect(() => {
+    loadVenueBookings();
+  }, [loadVenueBookings]);
+
   function updateFilter(key, value) {
-    const next = { ...filters, [key]: value };
-    setFilters(next);
-    loadArtists(next);
+    setFilters((current) => ({ ...current, [key]: value }));
   }
 
   async function requestBooking(artist) {
@@ -63,8 +78,24 @@ export default function MarketplacePage() {
       if (error) throw error;
       setBookingMessage('');
       setFeedback({ type: 'success', message: 'Solicitacao enviada ao artista.' });
+      await loadVenueBookings();
     } catch (err) {
       setFeedback({ type: 'error', message: err.message || 'Nao foi possivel solicitar a contratacao.' });
+    } finally {
+      setBookingLoadingId(null);
+    }
+  }
+
+  async function cancelBooking(requestId) {
+    setBookingLoadingId(requestId);
+    setFeedback(null);
+    try {
+      const { error } = await updateBookingStatus(requestId, 'cancelled');
+      if (error) throw error;
+      setFeedback({ type: 'success', message: 'Solicitacao cancelada.' });
+      await loadVenueBookings();
+    } catch (err) {
+      setFeedback({ type: 'error', message: err.message || 'Nao foi possivel cancelar a solicitacao.' });
     } finally {
       setBookingLoadingId(null);
     }
@@ -129,6 +160,34 @@ export default function MarketplacePage() {
           className="rounded-xl border border-palco-border bg-palco-dark px-4 py-3 text-sm text-palco-text outline-none placeholder:text-palco-text-subtle focus:border-palco-gold"
         />
       </div>
+
+      {profile?.role === 'venue' && bookingRequests.length > 0 && (
+        <section className="mb-8 border-y border-palco-border py-5">
+          <h2 className="font-display text-lg font-black text-palco-text">Minhas solicitacoes</h2>
+          <div className="mt-3 grid gap-3 lg:grid-cols-2">
+            {bookingRequests.slice(0, 6).map((request) => (
+              <div key={request.id} className="flex items-center justify-between gap-4 rounded-lg border border-palco-border bg-palco-card p-4">
+                <div className="min-w-0">
+                  <p className="truncate font-bold text-palco-text">{request.artist?.name || 'Artista PALCO'}</p>
+                  <p className="mt-1 text-xs text-palco-text-muted">
+                    {request.status === 'pending' ? 'Aguardando resposta' : request.status === 'accepted' ? 'Aceita pelo artista' : request.status === 'declined' ? 'Recusada pelo artista' : 'Cancelada'}
+                  </p>
+                </div>
+                {['pending', 'accepted'].includes(request.status) && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    loading={bookingLoadingId === request.id}
+                    onClick={() => cancelBooking(request.id)}
+                  >
+                    Cancelar
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {loading ? (
         <div className="flex min-h-[30vh] items-center justify-center">

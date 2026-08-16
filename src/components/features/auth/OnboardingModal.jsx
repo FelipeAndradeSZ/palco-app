@@ -1,6 +1,7 @@
 import { useState, useContext } from 'react';
 import { AuthContext } from '../../../contexts/AuthContextObject';
-import { updateProfile } from '../../../services/profileService';
+import { updateProfile, upsertArtistDetails } from '../../../services/profileService';
+import { upsertVenueProfile } from '../../../services/venueService';
 import { USER_ROLES, USER_ROLE_LABELS, MUSIC_GENRES } from '../../../lib/constants';
 import Button from '../../ui/Button';
 
@@ -24,17 +25,24 @@ export default function OnboardingModal() {
     setError(null);
 
     try {
-      await updateProfile(user.id, {
+      const profileResult = await updateProfile(user.id, {
         role,
         onboarding_completed: true,
       });
+      if (profileResult.error) throw profileResult.error;
 
-      // If artist, we should also try to create the artist_details row, but the backend trigger handle_new_user 
-      // only creates it if role='artist' at insert.
-      // Wait, we can't easily insert into artist_details if it wasn't created.
-      // Actually, we don't need to worry about artist_details for now because it can be lazily created 
-      // or we just let them update it later. We just update the role!
-      
+      if (role === USER_ROLES.ARTIST) {
+        const artistResult = await upsertArtistDetails(user.id, {
+          main_genre: mainGenre,
+          quality_tier: 'bronze',
+          available_for_booking: true,
+        });
+        if (artistResult.error) throw artistResult.error;
+      } else if (role === USER_ROLES.VENUE) {
+        const venueResult = await upsertVenueProfile(user.id, {});
+        if (venueResult.error) throw venueResult.error;
+      }
+
       await refreshProfile();
     } catch (err) {
       setError('Erro ao concluir cadastro. Tente novamente.');

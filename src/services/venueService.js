@@ -60,3 +60,19 @@ export async function getBookingRequests(profileId, role) {
 
   return { data: data || [], error };
 }
+
+export async function updateBookingStatus(requestId, status) {
+  const allowedStatuses = ['accepted', 'declined', 'cancelled'];
+  if (!allowedStatuses.includes(status)) {
+    return { data: null, error: new Error('Status de contratacao invalido.') };
+  }
+
+  const { data, error } = await supabase
+    .from('booking_requests')
+    .update({ status })
+    .eq('id', requestId)
+    .select()
+    .single();
+
+  return { data, error };
+}

@@ -10,7 +10,7 @@ import { supabase } from '../lib/supabase';
 export function useRoomRealtime(roomId, options = {}) {
   const { user } = useAuth();
   const userId = user?.id;
-  const { onRoomUpdate, targetArtistId = null } = options;
+  const { onRoomUpdate, onLikeReceived, targetArtistId = null } = options;
   const [messages, setMessages] = useState([]);
   const [activeRequests, setActiveRequests] = useState([]);
   const [activeBattles, setActiveBattles] = useState([]);
@@ -103,15 +103,12 @@ export function useRoomRealtime(roomId, options = {}) {
 
     hydrate();
 
-    console.log('[useRoomRealtime] Subscribing to room:', roomId, 'with artist:', targetArtistId);
     const channel = subscribeToRoom(roomId, {
       onConnectionStatus: (status) => {
-        console.log('[useRoomRealtime] Connection status changed:', status);
         if (!isMounted) return;
         setIsConnected(status === 'SUBSCRIBED');
       },
       onNewMessage: async (newMsg) => {
-        console.log('[useRoomRealtime] onNewMessage event fired:', newMsg);
         if (!isMounted) return;
         if (newMsg.artist_id !== targetArtistId) return;
         const enrichedMsg = await resolveMessageSender(newMsg);
@@ -119,12 +116,8 @@ export function useRoomRealtime(roomId, options = {}) {
         if (!isMounted) return;
         appendMessage(enrichedMsg);
 
-        if (newMsg.message_type === 'tip_alert' || newMsg.message_type === 'request_alert') {
-          triggerTvAlert(enrichedMsg);
-        }
       },
       onSongRequestUpdate: async ({ eventType, newRecord, oldRecord }) => {
-        console.log('[useRoomRealtime] onSongRequestUpdate event fired:', eventType, newRecord);
         if (!isMounted) return;
 
         if (eventType === 'INSERT') {
@@ -138,6 +131,12 @@ export function useRoomRealtime(roomId, options = {}) {
             setActiveRequests((prev) => {
               if (prev.some((request) => request.id === enrichedRequest.id)) return prev;
               return [...prev, enrichedRequest].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+            });
+            triggerTvAlert({
+              ...enrichedRequest,
+              message_type: 'request_alert',
+              content: `"${enrichedRequest.song_title}" por R$ ${Number(enrichedRequest.bounty_value).toFixed(2)}${enrichedRequest.dedication ? `. ${enrichedRequest.dedication}` : ''}`,
+              sender: profileData,
             });
           } catch (err) {
             console.error('[useRoomRealtime] Erro ao enriquecer pedido:', err);
@@ -155,11 +154,9 @@ export function useRoomRealtime(roomId, options = {}) {
         }
       },
       onRoomUpdate: (updatedRoom) => {
-        console.log('[useRoomRealtime] onRoomUpdate event fired:', updatedRoom);
         if (isMounted && onRoomUpdate) onRoomUpdate(updatedRoom);
       },
       onVoteCast: (newVote) => {
-        console.log('[useRoomRealtime] onVoteCast event fired:', newVote);
         if (!isMounted) return;
         if (targetArtistId && newVote.artist_id !== targetArtistId) return;
 
@@ -167,6 +164,23 @@ export function useRoomRealtime(roomId, options = {}) {
           ...prev,
           [newVote.category]: (prev[newVote.category] || 0) + 1,
         }));
+      },
+      onArtistInteraction: async (interaction) => {
+        if (!isMounted || interaction.artist_id !== targetArtistId) return;
+
+        const enrichedInteraction = await resolveMessageSender({
+          ...interaction,
+          sender_id: interaction.sender_id,
+        });
+        if (!isMounted) return;
+
+        if (interaction.interaction_type === 'tip') {
+          triggerTvAlert({
+            ...enrichedInteraction,
+            message_type: 'tip_alert',
+            content: `R$ ${Number(interaction.amount || 0).toFixed(2)}${interaction.message ? ` - ${interaction.message}` : ''}`,
+          });
+        }
       },
       onBattleUpdate: ({ eventType, newRecord, oldRecord }) => {
         if (!isMounted) return;
@@ -199,9 +213,8 @@ export function useRoomRealtime(roomId, options = {}) {
         }
       },
       onLikeTap: (payload) => {
-        console.log('[useRoomRealtime] onLikeTap event fired:', payload);
-        if (isMounted && options.onLikeReceived) {
-          options.onLikeReceived(payload);
+        if (isMounted && onLikeReceived) {
+          onLikeReceived(payload);
         }
       },
     });
@@ -209,12 +222,11 @@ export function useRoomRealtime(roomId, options = {}) {
     channelRef.current = channel;
 
     return () => {
-      console.log('[useRoomRealtime] Cleaning up subscription for room:', roomId);
       isMounted = false;
       unsubscribeFromRoom(channelRef.current);
       channelRef.current = null;
     };
-  }, [appendMessage, roomId, resolveMessageSender, triggerTvAlert, onRoomUpdate, targetArtistId]);
+  }, [appendMessage, roomId, resolveMessageSender, triggerTvAlert, onRoomUpdate, onLikeReceived, targetArtistId]);
 
   const sendChatMessage = useCallback(async (content) => {
     if (!userId || !roomId) return { error: { message: 'Nao autorizado' } };
@@ -249,7 +261,7 @@ export function useRoomRealtime(roomId, options = {}) {
     await channelRef.current.broadcastChannel.send({
       type: 'broadcast',
       event: 'like_tap',
-      payload: { x, y, senderName: user?.name || 'Ouvinte' },
+      payload: { x, y, senderName: user?.user_metadata?.name || 'Ouvinte' },
     });
   }, [user]);
 

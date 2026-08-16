@@ -16,8 +16,26 @@ const corsHeaders = {
 
 function safeReturnPath(value: unknown) {
   if (typeof value !== 'string') return '/rooms'
-  if (!value.startsWith('/') || value.startsWith('//')) return '/rooms'
+  if (!value.startsWith('/') || value.startsWith('//') || value.includes('\\')) return '/rooms'
   return value
+}
+
+function getRedirectOrigin(req: Request) {
+  const siteUrl = Deno.env.get('SITE_URL')
+  if (!siteUrl) throw new Error('SITE_URL nao configurada no Supabase')
+
+  const siteOrigin = new URL(siteUrl).origin
+  const allowedOrigins = new Set([
+    siteOrigin,
+    ...(Deno.env.get('ALLOWED_ORIGINS') || '')
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .map((value) => new URL(value).origin),
+  ])
+  const requestOrigin = req.headers.get('origin')
+
+  return requestOrigin && allowedOrigins.has(requestOrigin) ? requestOrigin : siteOrigin
 }
 
 serve(async (req) => {
@@ -40,7 +58,7 @@ serve(async (req) => {
     const { amount, userId, returnTo } = await req.json()
     const checkoutAmount = Number(amount)
     const returnPath = safeReturnPath(returnTo)
-    const origin = req.headers.get('origin') || Deno.env.get('SITE_URL') || 'http://localhost:5173'
+    const origin = getRedirectOrigin(req)
 
     if (!checkoutAmount || !userId) {
       throw new Error('Amount and UserId are required')
@@ -73,9 +91,9 @@ serve(async (req) => {
       mode: 'payment',
       success_url: `${origin}/wallet/return?session_id={CHECKOUT_SESSION_ID}&return_to=${encodeURIComponent(returnPath)}`,
       cancel_url: `${origin}${returnPath}${returnPath.includes('?') ? '&' : '?'}checkout=cancel`,
-      client_reference_id: userId,
+      client_reference_id: authData.user.id,
       metadata: {
-        userId: userId,
+        userId: authData.user.id,
         amount: checkoutAmount.toString(),
         returnTo: returnPath
       }

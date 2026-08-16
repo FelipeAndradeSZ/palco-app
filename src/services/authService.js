@@ -83,11 +83,18 @@ export function onAuthStateChange(callback) {
  * O Supabase gerencia o redirecionamento automaticamente.
  * @param {'google' | 'apple'} provider 
  */
-export async function signInWithOAuth(provider) {
+export async function signInWithOAuth(provider, returnTo = '/') {
+  const safeReturnTo = typeof returnTo === 'string'
+    && returnTo.startsWith('/')
+    && !returnTo.startsWith('//')
+    && !returnTo.includes('\\')
+    ? returnTo
+    : '/';
+
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider,
     options: {
-      redirectTo: `${window.location.origin}/`,
+      redirectTo: `${window.location.origin}${safeReturnTo}`,
     },
   });
   return { data, error };

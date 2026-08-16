@@ -10,6 +10,7 @@ export function subscribeToRoom(roomId, {
   onRoomUpdate,
   onConnectionStatus,
   onVoteCast,
+  onArtistInteraction,
   onLikeTap,
   onBattleUpdate,
   onBattleVote,
@@ -20,6 +21,19 @@ export function subscribeToRoom(roomId, {
   
   // Use a shared channel name for broadcasts (likes) so that all clients receive it
   const broadcastChannel = supabase.channel(`room-bc:${roomId}`);
+
+  dbChannel.on(
+    'postgres_changes',
+    {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'artist_interactions',
+      filter: `room_id=eq.${roomId}`,
+    },
+    (payload) => {
+      if (onArtistInteraction) onArtistInteraction(payload.new);
+    }
+  );
 
   dbChannel.on(
     'postgres_changes',
@@ -58,6 +72,7 @@ export function subscribeToRoom(roomId, {
       event: '*',
       schema: 'public',
       table: 'battle_votes',
+      filter: `room_id=eq.${roomId}`,
     },
     (payload) => {
       if (onBattleVote) onBattleVote(payload);
@@ -117,22 +132,16 @@ export function subscribeToRoom(roomId, {
     }
   );
 
-  // Subscribe to both channels
+  // Subscribe to both channels.
   dbChannel.subscribe((status) => {
     if (onConnectionStatus) onConnectionStatus(status);
 
-    if (status === 'SUBSCRIBED') {
-      console.log(`[PALCO Realtime] Banco de dados conectado a sala ${roomId}`);
-    } else if (status === 'CHANNEL_ERROR') {
+    if (status === 'CHANNEL_ERROR') {
       console.error(`[PALCO Realtime] Erro de conexao DB na sala ${roomId}`);
     }
   });
 
-  broadcastChannel.subscribe((status) => {
-    if (status === 'SUBSCRIBED') {
-      console.log(`[PALCO Realtime] Canal de likes conectado a sala ${roomId}`);
-    }
-  });
+  broadcastChannel.subscribe();
 
   return { dbChannel, broadcastChannel };
 }
