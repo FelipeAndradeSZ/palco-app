@@ -8,6 +8,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { useRooms } from '../hooks/useRooms';
 import { useAuth } from '../hooks/useAuth';
@@ -46,6 +47,8 @@ const AUDIO_BARS = [
 ];
 
 export default function TVModePage() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { profile } = useAuth();
   const { rooms, loading } = useRooms();
   const [selectedRoom, setSelectedRoom] = useState(null);
@@ -64,6 +67,7 @@ export default function TVModePage() {
   const [startingSubscription, setStartingSubscription] = useState(null);
   const [presenceRoomId, setPresenceRoomId] = useState(null);
   const [configFeedback, setConfigFeedback] = useState(null);
+  const subscriptionReturnStatus = searchParams.get('subscription');
 
   // Relógio atualizado a cada minuto
   useEffect(() => {
@@ -83,9 +87,55 @@ export default function TVModePage() {
 
     async function loadVenueConfig() {
       if (!profile?.id) return;
-      const { data } = await getVenueProfile(profile.id);
-      const { data: subscriptionData } = await getActiveSubscription(profile.id);
-      if (!cancelled) setSubscription(subscriptionData || null);
+      const [venueResult, initialSubscriptionResult] = await Promise.all([
+        getVenueProfile(profile.id),
+        getActiveSubscription(profile.id),
+      ]);
+
+      if (venueResult.error) {
+        if (!cancelled) {
+          setConfigFeedback({
+            type: 'error',
+            message: venueResult.error.message || 'Nao foi possivel carregar as configuracoes do estabelecimento.',
+          });
+        }
+        return;
+      }
+
+      if (initialSubscriptionResult.error) {
+        if (!cancelled) {
+          setConfigFeedback({
+            type: 'error',
+            message: initialSubscriptionResult.error.message || 'Nao foi possivel consultar o Plano Ambiente.',
+          });
+        }
+        return;
+      }
+
+      let subscriptionData = initialSubscriptionResult.data;
+      if (subscriptionReturnStatus === 'success' && !subscriptionData) {
+        for (let attempt = 0; attempt < 5 && !cancelled && !subscriptionData; attempt += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 1200));
+          const retryResult = await getActiveSubscription(profile.id);
+          if (retryResult.error) break;
+          subscriptionData = retryResult.data;
+        }
+      }
+
+      if (!cancelled) {
+        setSubscription(subscriptionData || null);
+        if (subscriptionReturnStatus === 'success') {
+          setConfigFeedback(subscriptionData
+            ? { type: 'success', message: 'Plano Ambiente ativado com sucesso.' }
+            : { type: 'warning', message: 'Pagamento recebido. A ativacao ainda esta sendo confirmada; atualize em instantes.' });
+          navigate('/tv', { replace: true });
+        } else if (subscriptionReturnStatus === 'cancel') {
+          setConfigFeedback({ type: 'warning', message: 'Assinatura cancelada antes do pagamento.' });
+          navigate('/tv', { replace: true });
+        }
+      }
+
+      const data = venueResult.data;
       if (!cancelled && data) {
         setVenueConfig({
           preferred_genre: data.preferred_genre || '',
@@ -103,7 +153,7 @@ export default function TVModePage() {
     return () => {
       cancelled = true;
     };
-  }, [profile?.id]);
+  }, [navigate, profile?.id, subscriptionReturnStatus]);
 
   async function updateVenueConfig(key, value) {
     const previous = venueConfig;
@@ -227,7 +277,14 @@ export default function TVModePage() {
         </div>
 
         {configFeedback && (
-          <div className="mb-6 w-full max-w-2xl rounded-xl border border-palco-live/30 bg-palco-live/10 px-4 py-3 text-center text-sm text-palco-live">
+          <div className={`mb-6 w-full max-w-2xl rounded-xl border px-4 py-3 text-center text-sm ${
+            configFeedback.type === 'success'
+              ? 'border-palco-success/30 bg-palco-success/10 text-palco-success'
+              : configFeedback.type === 'warning'
+                ? 'border-palco-gold/30 bg-palco-gold/10 text-palco-gold'
+                : 'border-palco-live/30 bg-palco-live/10 text-palco-live'
+          }`}
+          >
             {configFeedback.message}
           </div>
         )}
