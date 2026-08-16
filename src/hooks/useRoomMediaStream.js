@@ -117,7 +117,12 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
     let listenerRetryTimer = null;
     let listenerRetryCount = 0;
     const iceQueues = iceQueuesRef.current;
-    const channel = supabase.channel(`media:${roomId}:${artistId}`);
+    const channel = supabase.channel(`media:${roomId}:${artistId}`, {
+      config: {
+        private: true,
+        broadcast: { ack: true },
+      },
+    });
     channelRef.current = channel;
 
     if (role === 'listener') {
@@ -489,6 +494,11 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
       })
       .subscribe(async (subscriptionStatus) => {
         if (cancelled) return;
+        if (['CHANNEL_ERROR', 'TIMED_OUT'].includes(subscriptionStatus)) {
+          setError('Nao foi possivel autorizar a transmissao nesta sala. Entre novamente.');
+          setStatus('error');
+          return;
+        }
         if (subscriptionStatus !== 'SUBSCRIBED') return;
 
         try {

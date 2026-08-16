@@ -394,7 +394,7 @@ export default function PublicInteractionPage() {
     roomId: room?.id || roomId,
     artistId: selectedArtist?.id,
     role: 'listener',
-    enabled: listenEnabled && Boolean(selectedArtist?.id),
+    enabled: isAuthenticated && listenEnabled && Boolean(selectedArtist?.id),
   });
 
   function selectArtist(artistIdToSelect) {

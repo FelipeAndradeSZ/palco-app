@@ -721,7 +721,7 @@ export default function RoomPage() {
     roomId,
     artistId: selectedArtist?.id,
     role: 'listener',
-    enabled: listenEnabled && Boolean(selectedArtist?.id),
+    enabled: presenceReady && listenEnabled && Boolean(selectedArtist?.id),
   });
 
   useEffect(() => {

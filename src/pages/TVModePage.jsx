@@ -184,7 +184,7 @@ export default function TVModePage() {
     roomId: activeRoomId,
     artistId: selectedArtist?.id,
     role: 'listener',
-    enabled: Boolean(activeRoomId && selectedArtist?.id),
+    enabled: presenceRoomId === activeRoomId && Boolean(activeRoomId && selectedArtist?.id),
   });
 
   // Se nenhuma sala selecionada, mostra seletor de ambientes

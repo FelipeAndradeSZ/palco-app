@@ -21,7 +21,12 @@ export function subscribeToRoom(roomId, {
   const dbChannel = supabase.channel(`room-db:${roomId}:${dbChannelId}`);
   
   // Use a shared channel name for broadcasts (likes) so that all clients receive it
-  const broadcastChannel = supabase.channel(`room-bc:${roomId}`);
+  const broadcastChannel = supabase.channel(`room-bc:${roomId}`, {
+    config: {
+      private: true,
+      broadcast: { ack: true },
+    },
+  });
 
   dbChannel.on(
     'postgres_changes',
