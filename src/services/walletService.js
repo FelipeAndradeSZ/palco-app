@@ -4,6 +4,8 @@
 
 import { supabase } from '../lib/supabase';
 
+const checkoutConfirmations = new Map();
+
 async function functionErrorMessage(error, fallback) {
   try {
     if (error?.context) {
@@ -54,18 +56,27 @@ export async function addFundsCheckout(amount, userId, returnTo = '/rooms') {
   throw new Error('Checkout nao retornou uma URL de pagamento.');
 }
 
-export async function confirmCheckoutSession(sessionId) {
-  const { data, error } = await supabase.functions.invoke('confirm-checkout', {
-    body: { sessionId },
-  });
+export function confirmCheckoutSession(sessionId) {
+  if (!sessionId) return Promise.reject(new Error('Sessao de pagamento ausente.'));
+  if (checkoutConfirmations.has(sessionId)) return checkoutConfirmations.get(sessionId);
 
-  if (error) {
-    throw new Error(await functionErrorMessage(error, 'Nao foi possivel confirmar o pagamento.'));
-  }
+  const confirmation = (async () => {
+    const { data, error } = await supabase.functions.invoke('confirm-checkout', {
+      body: { sessionId },
+    });
 
-  if (!data?.ok) throw new Error(data?.error || 'Nao foi possivel confirmar o pagamento.');
+    if (error) {
+      throw new Error(await functionErrorMessage(error, 'Nao foi possivel confirmar o pagamento.'));
+    }
 
-  return data;
+    if (!data?.ok) throw new Error(data?.error || 'Nao foi possivel confirmar o pagamento.');
+
+    return data;
+  })();
+
+  checkoutConfirmations.set(sessionId, confirmation);
+  confirmation.catch(() => checkoutConfirmations.delete(sessionId));
+  return confirmation;
 }
 
 /**

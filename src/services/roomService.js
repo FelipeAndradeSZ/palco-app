@@ -82,6 +82,30 @@ export function unsubscribeFromRooms(channel) {
   if (channel) supabase.removeChannel(channel);
 }
 
+export function subscribeToRoom(roomId, onChange, onStatus) {
+  const channel = supabase
+    .channel(`room-public:${roomId}:${crypto.randomUUID()}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'rooms', filter: `id=eq.${roomId}` },
+      () => onChange?.()
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'room_artists', filter: `room_id=eq.${roomId}` },
+      (payload) => {
+        if (hasVisibleArtistChange(payload)) onChange?.();
+      }
+    )
+    .subscribe((status) => onStatus?.(status));
+
+  return channel;
+}
+
+export function unsubscribeFromRoom(channel) {
+  if (channel) supabase.removeChannel(channel);
+}
+
 export async function joinRoom(roomId, profileId, role = 'listener') {
   const { data, error } = await supabase
     .from('room_participants')

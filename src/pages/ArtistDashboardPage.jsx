@@ -251,6 +251,13 @@ export default function ArtistDashboardPage() {
   const activeRoom = rooms.find((room) => room.id === activeRoomId);
 
   useEffect(() => {
+    if (!selectedRoomId || roomsLoading || isProcessing) return;
+    if (!rooms.some((room) => roomHasArtist(room, profile?.id))) {
+      setSelectedRoomId(null);
+    }
+  }, [isProcessing, profile?.id, rooms, roomsLoading, selectedRoomId]);
+
+  useEffect(() => {
     if (!activeRoomId || !profile?.id) return undefined;
 
     let cancelled = false;

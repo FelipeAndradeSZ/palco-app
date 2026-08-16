@@ -47,6 +47,7 @@ export function AuthProvider({ children }) {
    */
   useEffect(() => {
     let isMounted = true;
+    let deferredProfileLoad = null;
 
     // 1. Verificar sessão existente
     const initializeAuth = async () => {
@@ -68,7 +69,7 @@ export function AuthProvider({ children }) {
     initializeAuth();
 
     // 2. Observar mudanças de auth
-    const subscription = authService.onAuthStateChange(async (event, session) => {
+    const subscription = authService.onAuthStateChange((event, session) => {
       if (!isMounted) return;
 
       if (event === 'SIGNED_IN' && session?.user) {
@@ -78,8 +79,12 @@ export function AuthProvider({ children }) {
         // O OnboardingModal cuida da seleção de role para novos usuários OAuth.
         // Não usamos mais localStorage para pending_role (vetor de escalação de privilégio).
 
-        await loadProfile();
+        clearTimeout(deferredProfileLoad);
+        deferredProfileLoad = setTimeout(() => {
+          if (isMounted) void loadProfile();
+        }, 0);
       } else if (event === 'SIGNED_OUT') {
+        clearTimeout(deferredProfileLoad);
         setUser(null);
         setProfile(null);
         setError(null);
@@ -91,6 +96,7 @@ export function AuthProvider({ children }) {
     // 3. Cleanup
     return () => {
       isMounted = false;
+      clearTimeout(deferredProfileLoad);
       subscription.unsubscribe();
     };
   }, [loadProfile]);

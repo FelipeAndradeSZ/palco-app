@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { getRoomById } from '../services/roomService';
+import { getRoomById, subscribeToRoom, unsubscribeFromRoom } from '../services/roomService';
 import { createSongRequest } from '../services/bountyService';
 import { useAuth } from '../hooks/useAuth';
 import { useRoomMediaStream } from '../hooks/useRoomMediaStream';
@@ -353,9 +353,11 @@ export default function PublicInteractionPage() {
     }
 
     loadRoom();
+    const channel = subscribeToRoom(roomId, loadRoom);
 
     return () => {
       cancelled = true;
+      unsubscribeFromRoom(channel);
     };
   }, [roomId]);
 
@@ -374,6 +376,13 @@ export default function PublicInteractionPage() {
     ? `/room/${roomId}?artist=${encodeURIComponent(selectedArtist.id)}`
     : `/room/${roomId}`;
   const loginUrl = getLoginUrl(realRoomPath);
+
+  useEffect(() => {
+    if (loading || !selectedArtistId || selectedArtist) return;
+    setSelectedArtistId(null);
+    setListenEnabled(false);
+    setFeedback({ type: 'error', message: 'O artista encerrou esta transmissao. Escolha outra live.' });
+  }, [loading, selectedArtist, selectedArtistId]);
 
   useEffect(() => {
     if (isAuthenticated && selectedArtist?.id) {
