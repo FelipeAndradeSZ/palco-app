@@ -745,7 +745,7 @@ export default function RoomPage() {
 
       if (profile?.id) {
         async function refreshPresence() {
-          const joinResult = await joinRoom(roomId, profile.id, profile.role);
+          const joinResult = await joinRoom(roomId);
           if (!isMounted) {
             if (!joinResult.error) await leaveRoom(roomId, profile.id);
             return false;

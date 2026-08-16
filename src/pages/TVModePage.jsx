@@ -152,7 +152,7 @@ export default function TVModePage() {
     let cancelled = false;
 
     async function refreshPresence() {
-      const result = await joinRoom(activeRoomId, profile.id, profile.role);
+      const result = await joinRoom(activeRoomId);
       if (cancelled) {
         if (!result.error) await leaveRoom(activeRoomId, profile.id);
         return;

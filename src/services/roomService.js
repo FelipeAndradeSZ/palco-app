@@ -106,15 +106,10 @@ export function unsubscribeFromRoom(channel) {
   if (channel) supabase.removeChannel(channel);
 }
 
-export async function joinRoom(roomId, profileId, role = 'listener') {
-  const { data, error } = await supabase
-    .from('room_participants')
-    .upsert(
-      { room_id: roomId, profile_id: profileId, role },
-      { onConflict: 'room_id,profile_id' }
-    )
-    .select()
-    .single();
+export async function joinRoom(roomId) {
+  const { data, error } = await supabase.rpc('heartbeat_room_presence', {
+    p_room_id: roomId,
+  });
 
   return { data, error };
 }
