@@ -256,16 +256,7 @@ function LiveActions({
         ))}
       </div>
 
-      {feedback && (
-        <div className={`mb-4 rounded-xl border px-3 py-2 text-sm ${
-          feedback.type === 'success'
-            ? 'border-palco-success/30 bg-palco-success/10 text-palco-success'
-            : 'border-palco-live/30 bg-palco-live/10 text-palco-live'
-        }`}
-        >
-          {feedback.message}
-        </div>
-      )}
+      {feedback && <div className="mb-4"><Alert type={feedback.type} message={feedback.message} /></div>}
 
       {activeAction === 'request' && (
         <div>
@@ -826,7 +817,7 @@ export default function RoomPage() {
   };
 
   const handleSongRequest = async (requestData) => {
-    const { error } = await createSongRequest({
+    const { error, warning } = await createSongRequest({
       roomId,
       targetArtistId: selectedArtist?.id || null,
       ...requestData,
@@ -836,7 +827,10 @@ export default function RoomPage() {
 
     const { data } = await getWallet(profile.id);
     if (data) setWallet(data);
-    setFeedback({ type: 'success', message: 'Pedido enviado para a fila do artista.' });
+    setFeedback({
+      type: warning ? 'warning' : 'success',
+      message: warning || 'Pedido enviado para a fila do artista.',
+    });
   };
 
   async function handleTipSubmit(event) {
@@ -865,10 +859,8 @@ export default function RoomPage() {
 
       setTipMessage('');
       setFeedback({
-        type: result?.data?.chat_warning ? 'error' : 'success',
-        message: result?.data?.chat_warning || (result?.data?.fallback
-          ? 'Gorjeta apareceu no chat. Aplique a migration para descontar creditos automaticamente.'
-          : 'Gorjeta enviada para o artista.'),
+        type: result?.data?.chat_warning ? 'warning' : 'success',
+        message: result?.data?.chat_warning || 'Gorjeta enviada para o artista.',
       });
     } catch (err) {
       setFeedback({ type: 'error', message: err.message || 'Nao foi possivel enviar a gorjeta.' });
@@ -881,8 +873,13 @@ export default function RoomPage() {
     try {
       const { error } = await castVote(key);
       if (error) throw error;
-      setFeedback({ type: 'success', message: `Voto registrado para a ${label} do artista!` });
-      await sendChatMessage(`Votou em "${label}" para ${selectedArtist.name}.`);
+      const chatResult = await sendChatMessage(`Votou em "${label}" para ${selectedArtist.name}.`);
+      setFeedback({
+        type: chatResult?.error ? 'warning' : 'success',
+        message: chatResult?.error
+          ? `Voto registrado para ${label}, mas o aviso no chat nao foi publicado.`
+          : `Voto registrado para a ${label} do artista!`,
+      });
     } catch (err) {
       setFeedback({ type: 'error', message: err.message || 'Não foi possível registrar seu voto.' });
     }

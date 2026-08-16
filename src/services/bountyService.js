@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { isRequestVisibleToArtist } from '../lib/requestVisibility';
 import { sendMessage } from './chatService';
 
 function shouldFallbackTipRpc(error) {
@@ -57,7 +58,21 @@ export async function createSongRequest({
     .single();
 
   if (!enhanced.error) {
-    await notifyRequest(roomId, user.id, payload.song_title, payload.bounty_value, payload.dedication, targetArtistId);
+    const notification = await notifyRequest(
+      roomId,
+      user.id,
+      payload.song_title,
+      payload.bounty_value,
+      payload.dedication,
+      targetArtistId
+    );
+
+    if (notification.error) {
+      return {
+        ...enhanced,
+        warning: 'Pedido pago e enviado para a fila, mas o aviso no chat nao foi publicado.',
+      };
+    }
   }
 
   return enhanced;
@@ -131,7 +146,7 @@ export async function getActiveRequests(roomId, targetArtistId = null) {
   if (enhanced.error) return { data: null, error: enhanced.error };
 
   const data = targetArtistId
-    ? enhanced.data.filter((request) => !request.target_artist_id || request.target_artist_id === targetArtistId)
+    ? enhanced.data.filter((request) => isRequestVisibleToArtist(request, targetArtistId))
     : enhanced.data;
   return { data, error: null };
 }

@@ -6,6 +6,7 @@ import { getActiveBattles, getBattleResults } from '../services/battleService';
 import { getProfile } from '../services/profileService';
 import { useAuth } from './useAuth';
 import { supabase } from '../lib/supabase';
+import { isRequestVisibleToArtist } from '../lib/requestVisibility';
 
 export function useRoomRealtime(roomId, options = {}) {
   const { user } = useAuth();
@@ -121,7 +122,7 @@ export function useRoomRealtime(roomId, options = {}) {
         if (!isMounted) return;
 
         if (eventType === 'INSERT') {
-          if (targetArtistId && newRecord.target_artist_id && newRecord.target_artist_id !== targetArtistId) {
+          if (targetArtistId && !isRequestVisibleToArtist(newRecord, targetArtistId)) {
             return;
           }
 
@@ -142,7 +143,8 @@ export function useRoomRealtime(roomId, options = {}) {
             console.error('[useRoomRealtime] Erro ao enriquecer pedido:', err);
           }
         } else if (eventType === 'UPDATE') {
-          if (newRecord.status === 'completed' || newRecord.status === 'cancelled') {
+          const isTerminal = newRecord.status === 'completed' || newRecord.status === 'cancelled';
+          if (isTerminal || (targetArtistId && !isRequestVisibleToArtist(newRecord, targetArtistId))) {
             setActiveRequests((prev) => prev.filter((request) => request.id !== newRecord.id));
           } else {
             setActiveRequests((prev) =>
