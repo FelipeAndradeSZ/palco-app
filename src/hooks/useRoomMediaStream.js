@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import {
+  MAX_P2P_LISTENERS,
+  appendBoundedCandidate,
+  isValidIceCandidate,
+  isValidSessionDescription,
+  isValidSignalId,
+} from '../lib/webrtcSignals';
 
 const TURN_URL = import.meta.env.VITE_TURN_URL;
 const TURN_USERNAME = import.meta.env.VITE_TURN_USERNAME;
@@ -154,14 +161,39 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
     }
 
     async function answerListenerOffer(payload) {
+      if (!payload || !isValidSignalId(payload.listenerId)) return;
       if (payload.senderSessionId === sessionIdRef.current) return;
       if (role !== 'artist' || payload.artistId !== artistId) return;
 
-      try {
-        const stream = await ensureArtistMedia();
+      if (!isValidSessionDescription(payload.offer, 'offer')) {
+        console.warn('[PALCO media] oferta de ouvinte invalida ignorada.');
+        return;
+      }
 
+      const existingPeer = artistPeersRef.current.get(payload.listenerId);
+      if (!existingPeer && artistPeersRef.current.size >= MAX_P2P_LISTENERS) {
+        await sendSignal('stream-unavailable', {
+          artistId,
+          listenerId: payload.listenerId,
+          reason: 'capacity',
+        });
+        return;
+      }
+
+      let stream;
+      try {
+        stream = await ensureArtistMedia();
+      } catch (err) {
+        console.error('[PALCO media] erro ao acessar camera e microfone:', err);
+        if (!cancelled) {
+          setError('Nao foi possivel iniciar camera e microfone do artista.');
+          setStatus('error');
+        }
+        return;
+      }
+
+      try {
         // Safely close pre-existing peer connection for this listener
-        const existingPeer = artistPeersRef.current.get(payload.listenerId);
         if (existingPeer) {
           try {
             existingPeer.close();
@@ -222,8 +254,10 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
         });
       } catch (err) {
         console.error('[PALCO media] erro ao responder listener:', err);
-        setError('Não foi possível iniciar a transmissão do artista.');
-        setStatus('error');
+        const failedPeer = artistPeersRef.current.get(payload.listenerId);
+        failedPeer?.close();
+        artistPeersRef.current.delete(payload.listenerId);
+        iceQueues.delete(payload.listenerId);
       }
     }
 
@@ -338,10 +372,10 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
 
     channel
       .on('broadcast', { event: 'listener-offer' }, ({ payload }) => {
-        if (payload.senderSessionId === sessionIdRef.current) return;
         answerListenerOffer(payload);
       })
       .on('broadcast', { event: 'listener-leave' }, ({ payload }) => {
+        if (!payload || !isValidSignalId(payload.listenerId)) return;
         if (payload.senderSessionId === sessionIdRef.current) return;
         if (role !== 'artist') return;
         const peer = artistPeersRef.current.get(payload.listenerId);
@@ -351,12 +385,14 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
         }
       })
       .on('broadcast', { event: 'artist-ready' }, ({ payload }) => {
+        if (!payload) return;
         if (payload.senderSessionId === sessionIdRef.current) return;
         if (role !== 'listener') return;
         if (payload.artistId !== artistId) return;
         startListenerSafely();
       })
       .on('broadcast', { event: 'artist-leave' }, ({ payload }) => {
+        if (!payload) return;
         if (payload.senderSessionId === sessionIdRef.current) return;
         if (role !== 'listener') return;
         if (payload.artistId !== artistId) return;
@@ -375,6 +411,7 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
         setStatus('waiting_artist');
       })
       .on('broadcast', { event: 'artist-answer' }, async ({ payload }) => {
+        if (!payload || !isValidSessionDescription(payload.answer, 'answer')) return;
         if (payload.senderSessionId === sessionIdRef.current) return;
         if (role !== 'listener') return;
         if (payload.artistId !== artistId || payload.listenerId !== listenerIdRef.current) return;
@@ -398,7 +435,18 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
           setStatus('error');
         }
       })
+      .on('broadcast', { event: 'stream-unavailable' }, ({ payload }) => {
+        if (!payload || payload.senderSessionId === sessionIdRef.current) return;
+        if (role !== 'listener') return;
+        if (payload.artistId !== artistId || payload.listenerId !== listenerIdRef.current) return;
+
+        clearTimeout(listenerRetryTimer);
+        listenerRetryTimer = null;
+        setError('A transmissao atingiu o limite temporario de ouvintes. Tente novamente em instantes.');
+        setStatus('error');
+      })
       .on('broadcast', { event: 'ice-candidate' }, async ({ payload }) => {
+        if (!payload || !isValidSignalId(payload.listenerId) || !isValidIceCandidate(payload.candidate)) return;
         if (payload.senderSessionId === sessionIdRef.current) return;
         if (payload.artistId !== artistId) return;
 
@@ -411,8 +459,7 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
               await peer.addIceCandidate(new RTCIceCandidate(candidate));
             } else {
               const queue = iceQueues.get('artist') || [];
-              queue.push(candidate);
-              iceQueues.set('artist', queue);
+              iceQueues.set('artist', appendBoundedCandidate(queue, candidate));
             }
           }
 
@@ -420,10 +467,9 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
             const peer = artistPeersRef.current.get(payload.listenerId);
             if (peer && peer.remoteDescription) {
               await peer.addIceCandidate(new RTCIceCandidate(candidate));
-            } else {
+            } else if (peer) {
               const queue = iceQueues.get(payload.listenerId) || [];
-              queue.push(candidate);
-              iceQueues.set(payload.listenerId, queue);
+              iceQueues.set(payload.listenerId, appendBoundedCandidate(queue, candidate));
             }
           }
         } catch (err) {
