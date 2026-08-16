@@ -4,7 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useRooms } from '../hooks/useRooms';
 import { useRoomRealtime } from '../hooks/useRoomRealtime';
 import { useRoomMediaStream } from '../hooks/useRoomMediaStream';
-import { updateRoomArtist } from '../services/roomService';
+import { heartbeatArtistLive, updateRoomArtist } from '../services/roomService';
 import { acceptBattle, cancelBattle, finishBattle, startBattleVoting } from '../services/battleService';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
@@ -249,6 +249,33 @@ export default function ArtistDashboardPage() {
 
   const activeRoomId = selectedRoomId || assignedRoomId;
   const activeRoom = rooms.find((room) => room.id === activeRoomId);
+
+  useEffect(() => {
+    if (!activeRoomId || !profile?.id) return undefined;
+
+    let cancelled = false;
+    let reportedFailure = false;
+
+    async function heartbeat() {
+      const { error } = await heartbeatArtistLive(activeRoomId);
+      if (!cancelled && error && !reportedFailure) {
+        reportedFailure = true;
+        setLiveFeedback({
+          type: 'error',
+          message: 'A transmissao perdeu contato com a sala. Encerre o show e entre novamente.',
+        });
+      }
+    }
+
+    heartbeat();
+    const timer = setInterval(heartbeat, 25_000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [activeRoomId, profile?.id]);
+
   const { activeRequests, activeBattles, messages, isConnected, sendChatMessage, tvAlerts } = useRoomRealtime(activeRoomId, {
     targetArtistId: profile?.id || null,
   });

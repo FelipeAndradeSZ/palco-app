@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { hasVisibleArtistChange, isLiveArtistEntry } from '../lib/roomArtists';
 
 const MULTI_ARTIST_ROOM_SELECT = `
   *,
@@ -13,6 +14,7 @@ const MULTI_ARTIST_ROOM_SELECT = `
     performance_order,
     current_song,
     started_at,
+    last_heartbeat_at,
     artist:profiles!room_artists_artist_id_fkey (
       id, name, avatar_url,
       artist_details (quality_tier, main_genre, rating)
@@ -24,11 +26,16 @@ function onlyLiveArtists(room) {
   if (!Array.isArray(room?.active_artists)) return room;
   return {
     ...room,
-    active_artists: room.active_artists.filter((entry) => !entry.status || entry.status === 'live'),
+    active_artists: room.active_artists.filter(isLiveArtistEntry),
   };
 }
 
+async function expireStalePresence() {
+  await supabase.rpc('expire_stale_room_presence');
+}
+
 export async function getRooms() {
+  await expireStalePresence();
   const enhanced = await supabase
     .from('rooms')
     .select(MULTI_ARTIST_ROOM_SELECT)
@@ -40,6 +47,7 @@ export async function getRooms() {
 }
 
 export async function getRoomById(roomId) {
+  await expireStalePresence();
   const enhanced = await supabase
     .from('rooms')
     .select(MULTI_ARTIST_ROOM_SELECT)
@@ -48,6 +56,30 @@ export async function getRoomById(roomId) {
 
   if (enhanced.error) return { data: null, error: enhanced.error };
   return { data: onlyLiveArtists(enhanced.data), error: null };
+}
+
+export function subscribeToRooms(onChange, onStatus) {
+  const channel = supabase
+    .channel(`rooms-list:${crypto.randomUUID()}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'rooms' },
+      () => onChange?.()
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'room_artists' },
+      (payload) => {
+        if (hasVisibleArtistChange(payload)) onChange?.();
+      }
+    )
+    .subscribe((status) => onStatus?.(status));
+
+  return channel;
+}
+
+export function unsubscribeFromRooms(channel) {
+  if (channel) supabase.removeChannel(channel);
 }
 
 export async function joinRoom(roomId, profileId, role = 'listener') {
@@ -88,4 +120,12 @@ export async function updateRoomArtist(roomId, artistId) {
 
   if (result.error) throw result.error;
   return result;
+}
+
+export async function heartbeatArtistLive(roomId) {
+  const { data, error } = await supabase.rpc('heartbeat_artist_live', {
+    p_room_id: roomId,
+  });
+
+  return { data, error };
 }

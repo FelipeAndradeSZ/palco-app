@@ -56,7 +56,7 @@ export default function RequestSongModal({ isOpen, onClose, onSubmit, currentBal
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-3 py-5 sm:items-center sm:p-4">
       {/* Backdrop (Glassmorphism) */}
       <div 
         className="absolute inset-0 bg-palco-black/80 backdrop-blur-sm cursor-pointer"
@@ -64,8 +64,8 @@ export default function RequestSongModal({ isOpen, onClose, onSubmit, currentBal
       />
 
       {/* Modal Content */}
-      <div className="relative w-full max-w-md bg-palco-card border border-palco-border rounded-2xl shadow-2xl overflow-hidden animate-bounce-in">
-        <div className="p-6">
+      <div className="relative max-h-[calc(100svh-2.5rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-palco-border bg-palco-card shadow-2xl animate-bounce-in">
+        <div className="p-4 sm:p-6">
           <h2 className="font-display font-bold text-2xl text-palco-text mb-1">
             Pedir Música
           </h2>

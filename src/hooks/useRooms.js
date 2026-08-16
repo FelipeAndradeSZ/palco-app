@@ -3,15 +3,15 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { getRooms } from '../services/roomService';
+import { getRooms, subscribeToRooms, unsubscribeFromRooms } from '../services/roomService';
 
 export function useRooms() {
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const fetchRooms = useCallback(async () => {
-    setLoading(true);
+  const fetchRooms = useCallback(async ({ background = false } = {}) => {
+    if (!background) setLoading(true);
     setError(null);
     try {
       const { data, error: fetchError } = await getRooms();
@@ -28,8 +28,18 @@ export function useRooms() {
   }, []);
 
   useEffect(() => {
-    const task = setTimeout(fetchRooms, 0);
-    return () => clearTimeout(task);
+    let refreshTimer = null;
+    const task = setTimeout(() => fetchRooms(), 0);
+    const channel = subscribeToRooms(() => {
+      clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => fetchRooms({ background: true }), 150);
+    });
+
+    return () => {
+      clearTimeout(task);
+      clearTimeout(refreshTimer);
+      unsubscribeFromRooms(channel);
+    };
   }, [fetchRooms]);
 
   return { rooms, loading, error, refetch: fetchRooms };

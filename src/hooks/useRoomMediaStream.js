@@ -20,15 +20,6 @@ const RTC_CONFIG = {
   iceCandidatePoolSize: 4,
 };
 
-function getListenerId() {
-  const key = '@palco/listener_id';
-  const existing = localStorage.getItem(key);
-  if (existing) return existing;
-  const next = crypto.randomUUID();
-  localStorage.setItem(key, next);
-  return next;
-}
-
 function optimizeSdp(sdp) {
   let lines = sdp.split('\r\n');
   let inVideoSection = false;
@@ -116,6 +107,8 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
     }
 
     let cancelled = false;
+    let listenerRetryTimer = null;
+    let listenerRetryCount = 0;
     const iceQueues = iceQueuesRef.current;
     const channel = supabase.channel(`media:${roomId}:${artistId}`);
     channelRef.current = channel;
@@ -237,7 +230,8 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
     async function startListenerOffer() {
       if (role !== 'listener') return;
 
-      listenerIdRef.current = getListenerId();
+      listenerIdRef.current ||= crypto.randomUUID();
+      iceQueues.delete('artist');
 
       // Safely close pre-existing listener peer connection
       if (listenerPeerRef.current) {
@@ -274,10 +268,14 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
       };
 
       peer.onconnectionstatechange = () => {
-        if (peer.connectionState === 'connected') setStatus('live');
-        if (peer.connectionState === 'failed') {
-          setStatus('error');
-          setError('Não foi possível conectar ao áudio do artista.');
+        if (peer.connectionState === 'connected') {
+          listenerRetryCount = 0;
+          setError(null);
+          setStatus('live');
+        }
+
+        if (peer.connectionState === 'failed' || peer.connectionState === 'disconnected') {
+          scheduleListenerRetry(peer);
         }
       };
 
@@ -301,6 +299,43 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
       setStatus('waiting_artist');
     }
 
+    function scheduleListenerRetry(peer) {
+      if (cancelled || role !== 'listener' || listenerRetryTimer) return;
+
+      const failedState = peer?.connectionState || 'failed';
+      const delay = failedState === 'disconnected' ? 2500 : Math.min(1000 * (2 ** listenerRetryCount), 8000);
+      setStatus('reconnecting');
+      setError(null);
+
+      listenerRetryTimer = setTimeout(async () => {
+        listenerRetryTimer = null;
+        if (cancelled || peer?.connectionState === 'connected') return;
+
+        if (listenerRetryCount >= 4) {
+          setStatus('error');
+          setError('A conexão com o artista caiu. Toque em tentar novamente.');
+          return;
+        }
+
+        listenerRetryCount += 1;
+        try {
+          await startListenerOffer();
+        } catch (err) {
+          console.error('[PALCO media] erro ao reconectar ouvinte:', err);
+          scheduleListenerRetry(listenerPeerRef.current || peer);
+        }
+      }, delay);
+    }
+
+    async function startListenerSafely() {
+      try {
+        await startListenerOffer();
+      } catch (err) {
+        console.error('[PALCO media] erro ao iniciar ouvinte:', err);
+        scheduleListenerRetry(listenerPeerRef.current);
+      }
+    }
+
     channel
       .on('broadcast', { event: 'listener-offer' }, ({ payload }) => {
         if (payload.senderSessionId === sessionIdRef.current) return;
@@ -319,14 +354,15 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
         if (payload.senderSessionId === sessionIdRef.current) return;
         if (role !== 'listener') return;
         if (payload.artistId !== artistId) return;
-        console.log('[PALCO media] artista ficou pronto para transmitir, iniciando offer...');
-        startListenerOffer();
+        startListenerSafely();
       })
       .on('broadcast', { event: 'artist-leave' }, ({ payload }) => {
         if (payload.senderSessionId === sessionIdRef.current) return;
         if (role !== 'listener') return;
         if (payload.artistId !== artistId) return;
-        console.log('[PALCO media] artista encerrou transmissão, limpando conexão...');
+        clearTimeout(listenerRetryTimer);
+        listenerRetryTimer = null;
+        listenerRetryCount = 0;
         clearRemoteStream();
         if (listenerPeerRef.current) {
           try {
@@ -405,7 +441,7 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
             // Notify any active waiting listeners that the stream is ready
             sendSignal('artist-ready', { artistId });
           } else {
-            await startListenerOffer();
+            await startListenerSafely();
           }
         } catch (err) {
           console.error('[PALCO media] erro ao iniciar mídia:', err);
@@ -419,6 +455,7 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
 
     return () => {
       cancelled = true;
+      clearTimeout(listenerRetryTimer);
       if (role === 'listener' && listenerIdRef.current) {
         sendSignal('listener-leave', {
           artistId,

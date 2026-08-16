@@ -213,7 +213,7 @@ export function useRoomRealtime(roomId, options = {}) {
         }
       },
       onLikeTap: (payload) => {
-        if (isMounted && onLikeReceived) {
+        if (isMounted && onLikeReceived && payload.artistId === targetArtistId) {
           onLikeReceived(payload);
         }
       },
@@ -257,13 +257,18 @@ export function useRoomRealtime(roomId, options = {}) {
   }, [roomId, targetArtistId, userId]);
 
   const sendLike = useCallback(async (x = 50, y = 50) => {
-    if (!channelRef.current?.broadcastChannel) return;
+    if (!channelRef.current?.broadcastChannel || !targetArtistId) return;
     await channelRef.current.broadcastChannel.send({
       type: 'broadcast',
       event: 'like_tap',
-      payload: { x, y, senderName: user?.user_metadata?.name || 'Ouvinte' },
+      payload: {
+        artistId: targetArtistId,
+        x,
+        y,
+        senderName: user?.user_metadata?.name || 'Ouvinte',
+      },
     });
-  }, [user]);
+  }, [targetArtistId, user]);
 
   return {
     messages,

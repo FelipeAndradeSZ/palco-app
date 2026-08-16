@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { hasVisibleArtistChange } from '../lib/roomArtists';
 
 /**
  * Subscribe a client to realtime updates for one room.
@@ -32,6 +33,19 @@ export function subscribeToRoom(roomId, {
     },
     (payload) => {
       if (onArtistInteraction) onArtistInteraction(payload.new);
+    }
+  );
+
+  dbChannel.on(
+    'postgres_changes',
+    {
+      event: '*',
+      schema: 'public',
+      table: 'room_artists',
+      filter: `room_id=eq.${roomId}`,
+    },
+    (payload) => {
+      if (onRoomUpdate && hasVisibleArtistChange(payload)) onRoomUpdate();
     }
   );
 

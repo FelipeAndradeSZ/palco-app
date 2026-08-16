@@ -3,6 +3,7 @@ import {
   getActiveArtists,
   getArtistInteractionUrl,
   getPrimaryArtist,
+  hasVisibleArtistChange,
   roomHasArtist,
 } from './roomArtists';
 
@@ -47,5 +48,32 @@ describe('multi-artist rooms', () => {
   it('builds a QR destination scoped to both room and artist', () => {
     expect(getArtistInteractionUrl('room 1', 'artist/2'))
       .toBe('/interact/room%201?artist=artist%2F2');
+  });
+
+  it('hides an artist whose live heartbeat expired', () => {
+    const staleRoom = {
+      active_artists: [{
+        status: 'live',
+        last_heartbeat_at: '2000-01-01T00:00:00.000Z',
+        artist: { id: 'stale-artist', name: 'Sem sinal' },
+      }],
+      current_artist: { id: 'stale-artist', name: 'Sem sinal' },
+    };
+
+    expect(getActiveArtists(staleRoom)).toEqual([]);
+  });
+
+  it('ignores heartbeat-only realtime updates', () => {
+    expect(hasVisibleArtistChange({
+      eventType: 'UPDATE',
+      old: { id: 'membership-1', status: 'live', last_heartbeat_at: '2026-01-01' },
+      new: { id: 'membership-1', status: 'live', last_heartbeat_at: '2026-01-02' },
+    })).toBe(false);
+
+    expect(hasVisibleArtistChange({
+      eventType: 'UPDATE',
+      old: { id: 'membership-1', status: 'live' },
+      new: { id: 'membership-1', status: 'offline' },
+    })).toBe(true);
   });
 });

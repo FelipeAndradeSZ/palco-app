@@ -4,6 +4,19 @@
 
 import { supabase } from '../lib/supabase';
 
+async function functionErrorMessage(error, fallback) {
+  try {
+    if (error?.context) {
+      const details = await error.context.json();
+      return details?.error || fallback;
+    }
+  } catch {
+    // The response body may already have been consumed by the client.
+  }
+
+  return error?.message || fallback;
+}
+
 /**
  * Busca a carteira do usuário logado.
  */
@@ -30,7 +43,9 @@ export async function addFundsCheckout(amount, userId, returnTo = '/rooms') {
     body: { amount: checkoutAmount, userId, returnTo },
   });
 
-  if (error) throw error;
+  if (error) {
+    throw new Error(await functionErrorMessage(error, 'Nao foi possivel iniciar o pagamento.'));
+  }
   if (data?.url) {
     window.location.href = data.url; // Redireciona pro Stripe
     return;
@@ -45,17 +60,7 @@ export async function confirmCheckoutSession(sessionId) {
   });
 
   if (error) {
-    let details = null;
-
-    try {
-      if (error.context) {
-        details = await error.context.json();
-      }
-    } catch {
-      details = null;
-    }
-
-    throw new Error(details?.error || error.message || 'Nao foi possivel confirmar o pagamento.');
+    throw new Error(await functionErrorMessage(error, 'Nao foi possivel confirmar o pagamento.'));
   }
 
   if (!data?.ok) throw new Error(data?.error || 'Nao foi possivel confirmar o pagamento.');
@@ -104,4 +109,3 @@ export async function getTransactions(profileId) {
 
   return { data, error };
 }
-

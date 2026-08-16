@@ -1,12 +1,11 @@
 import { useState, useContext } from 'react';
 import { AuthContext } from '../../../contexts/AuthContextObject';
-import { updateProfile, upsertArtistDetails } from '../../../services/profileService';
-import { upsertVenueProfile } from '../../../services/venueService';
+import { completeOnboarding } from '../../../services/profileService';
 import { USER_ROLES, USER_ROLE_LABELS, MUSIC_GENRES } from '../../../lib/constants';
 import Button from '../../ui/Button';
 
 export default function OnboardingModal() {
-  const { user, profile, requiresOnboarding, refreshProfile } = useContext(AuthContext);
+  const { profile, requiresOnboarding, refreshProfile } = useContext(AuthContext);
   const [role, setRole] = useState(profile?.role || USER_ROLES.LISTENER);
   const [mainGenre, setMainGenre] = useState('');
   const [loading, setLoading] = useState(false);
@@ -25,27 +24,12 @@ export default function OnboardingModal() {
     setError(null);
 
     try {
-      const profileResult = await updateProfile(user.id, {
-        role,
-        onboarding_completed: true,
-      });
-      if (profileResult.error) throw profileResult.error;
-
-      if (role === USER_ROLES.ARTIST) {
-        const artistResult = await upsertArtistDetails(user.id, {
-          main_genre: mainGenre,
-          quality_tier: 'bronze',
-          available_for_booking: true,
-        });
-        if (artistResult.error) throw artistResult.error;
-      } else if (role === USER_ROLES.VENUE) {
-        const venueResult = await upsertVenueProfile(user.id, {});
-        if (venueResult.error) throw venueResult.error;
-      }
+      const result = await completeOnboarding(role, mainGenre);
+      if (result.error) throw result.error;
 
       await refreshProfile();
     } catch (err) {
-      setError('Erro ao concluir cadastro. Tente novamente.');
+      setError(err.message || 'Erro ao concluir cadastro. Tente novamente.');
       console.error(err);
     } finally {
       setLoading(false);
@@ -53,8 +37,8 @@ export default function OnboardingModal() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-      <div className="w-full max-w-md bg-palco-dark-lighter border border-palco-border rounded-2xl p-6 shadow-2xl animate-fade-in-up">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/80 p-3 py-5 backdrop-blur-sm sm:items-center sm:p-4">
+      <div className="max-h-[calc(100svh-2.5rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-palco-border bg-palco-dark-lighter p-5 shadow-2xl animate-fade-in-up sm:p-6">
         <h2 className="text-2xl font-bold text-white mb-2 text-center">Complete seu Perfil</h2>
         <p className="text-palco-text-muted text-sm text-center mb-6">
           Vimos que você entrou com o Google. Conta pra gente: como você vai usar o PALCO?

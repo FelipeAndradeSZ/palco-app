@@ -5,6 +5,9 @@ import { useRooms } from '../hooks/useRooms';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Spinner from '../components/ui/Spinner';
+import Alert from '../components/ui/Alert';
+import { getActiveArtists, getArtistInteractionUrl } from '../lib/roomArtists';
+import { getLoginUrl } from '../lib/navigation';
 
 const brandFlow = [
   { step: '01', title: 'Escolha uma sala', text: 'Ambientes contínuos como Sertanejo Churrasco, Pagode de Mesa e MPB.' },
@@ -61,71 +64,89 @@ function EqualizerLogo({ compact = false }) {
   );
 }
 
-function HeroMonitor() {
+function HeroMonitor({ room, artists, loading, onOpen }) {
+  const artist = artists[0] || null;
+  const isLive = Boolean(artist);
+
   return (
     <div className="relative w-full max-w-[450px] mx-auto group">
-      {/* Outer gold-glow container resembling the premium television mock in the user reference image */}
       <div className="rounded-[2rem] border border-palco-border/80 bg-[#080809]/95 p-3.5 shadow-[0_25px_60px_rgba(0,0,0,0.85)] transition-all duration-500 hover:border-palco-gold/45 hover:shadow-[0_25px_60px_rgba(212,168,67,0.08)]">
         <div className="overflow-hidden rounded-2xl border border-white/10 bg-[linear-gradient(135deg,rgba(40,24,15,0.7),rgba(10,10,12,0.99)_50%,rgba(20,20,25,0.8))]">
-          
-          {/* Header */}
           <div className="flex items-center justify-between border-b border-white/15 px-4 py-3 bg-black/40">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.18em] text-palco-text-muted">
-                SALA SERTANEJO CHURRASCO
+                {room?.name || 'PALCO AO VIVO'}
               </p>
               <div className="mt-1 flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-palco-live animate-ping" />
-                <span className="inline-flex rounded-full bg-palco-live px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-white">
-                  AO VIVO
+                <span className={`h-2 w-2 rounded-full ${isLive ? 'bg-palco-live animate-pulse' : 'bg-palco-text-subtle'}`} />
+                <span className={`inline-flex rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${
+                  isLive ? 'bg-palco-live text-white' : 'bg-white/10 text-palco-text-muted'
+                }`}>
+                  {loading ? 'CONECTANDO' : isLive ? 'AO VIVO' : 'AGUARDANDO ARTISTA'}
                 </span>
               </div>
             </div>
             <div className="text-right text-[10px] font-bold text-palco-text-muted">
-              <p>Pedidos</p>
-              <p className="text-palco-gold font-black">R$ 125 na fila</p>
+              <p>Na sala</p>
+              <p className="text-palco-gold font-black">
+                {artists.length} {artists.length === 1 ? 'artista' : 'artistas'}
+              </p>
             </div>
           </div>
 
-          {/* Video / Content Grid */}
           <div className="grid grid-cols-1 md:grid-cols-[1.1fr_0.9fr] gap-3.5 p-3.5">
-            
-            {/* Live Artist Avatar visualizer */}
             <div className="relative overflow-hidden rounded-xl border border-white/10 bg-[radial-gradient(circle_at_50%_15%,rgba(212,168,67,0.22),transparent_40%),linear-gradient(180deg,rgba(20,20,25,0.4),rgba(5,5,7,0.95))] min-h-[220px] flex flex-col justify-end">
               <div className="absolute inset-x-4 top-8 h-20 rounded-full bg-palco-gold/10 blur-2xl" />
               <div className="absolute bottom-0 left-0 right-0 h-28 bg-gradient-to-t from-black via-black/85 to-transparent" />
-              
               <div className="relative flex flex-col items-center justify-end px-4 py-5 text-center z-10">
-                {/* Simulated Artist profile picture */}
-                <div className="mb-4 h-20 w-20 rounded-full border-2 border-palco-gold bg-[radial-gradient(circle_at_50%_30%,#e8c76a,rgba(176,138,46,0.85)_40%,#000_80%)] shadow-[0_0_25px_rgba(212,168,67,0.4)] flex items-center justify-center font-display font-black text-white text-xl">
-                  GM
+                <div className="mb-4 flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-2 border-palco-gold bg-palco-gold/15 font-display text-xl font-black text-palco-gold shadow-[0_0_25px_rgba(212,168,67,0.4)]">
+                  {artist?.avatar_url ? (
+                    <img src={artist.avatar_url} alt={artist.name} className="h-full w-full object-cover" />
+                  ) : (
+                    artist?.name?.charAt(0)?.toUpperCase() || 'P'
+                  )}
                 </div>
-                <p className="font-display text-lg font-black tracking-wide text-white">Gustavo Martins</p>
-                <p className="text-[10px] font-black uppercase tracking-widest text-palco-gold-light mt-0.5">Tocando agora</p>
+                <p className="font-display text-lg font-black tracking-wide text-white">
+                  {artist?.name || (loading ? 'Buscando transmissões' : 'O próximo show começa aqui')}
+                </p>
+                <p className="mt-0.5 text-[10px] font-black uppercase tracking-widest text-palco-gold-light">
+                  {artist?.current_song || artist?.main_genre || (room ? 'Sala disponível' : 'Música ao vivo de verdade')}
+                </p>
+                {room && (
+                  <button
+                    type="button"
+                    onClick={onOpen}
+                    className="mt-4 rounded-xl bg-palco-gold px-4 py-2 text-xs font-black text-palco-black transition hover:bg-palco-gold-light"
+                  >
+                    {isLive ? 'Entrar nesta live' : 'Ver esta sala'}
+                  </button>
+                )}
               </div>
             </div>
 
-            {/* Song Queue list */}
             <div className="flex flex-col gap-2">
-              {[
-                { song: 'Evidências', meta: 'Mesa 4', value: 'R$ 15' },
-                { song: 'Anna Júlia', meta: 'Lucas pediu', value: 'R$ 10' },
-                { song: 'Boate Azul', meta: 'Dedicatória', value: 'R$ 20' },
-              ].map(({ song, meta, value }) => (
-                <div key={song} className="rounded-xl border border-white/5 bg-white/[0.02] p-2.5 hover:border-palco-gold/20 hover:bg-white/[0.04] transition duration-300">
+              {(artists.length > 0 ? artists.slice(0, 3) : [null, null, null]).map((liveArtist, index) => (
+                <div key={liveArtist?.id || `empty-${index}`} className="rounded-xl border border-white/5 bg-white/[0.02] p-2.5 transition duration-300 hover:border-palco-gold/20 hover:bg-white/[0.04]">
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="text-xs font-black text-white truncate">{song}</p>
-                      <p className="text-[9px] font-semibold text-palco-text-muted truncate">{meta}</p>
+                      <p className="truncate text-xs font-black text-white">
+                        {liveArtist?.name || (loading ? 'Carregando...' : 'Espaço livre no palco')}
+                      </p>
+                      <p className="truncate text-[9px] font-semibold text-palco-text-muted">
+                        {liveArtist?.current_song || liveArtist?.main_genre || 'Artistas podem entrar nesta sala'}
+                      </p>
                     </div>
-                    <span className="rounded-full bg-palco-success/15 border border-palco-success/20 px-2 py-0.5 text-[9px] font-black text-palco-success shrink-0">
-                      {value}
+                    <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[9px] font-black ${
+                      liveArtist
+                        ? 'border-palco-success/20 bg-palco-success/15 text-palco-success'
+                        : 'border-white/10 bg-white/[0.03] text-palco-text-subtle'
+                    }`}>
+                      {liveArtist ? 'AO VIVO' : 'LIVRE'}
                     </span>
                   </div>
                 </div>
               ))}
 
-              {/* Sound Wave Graphic */}
               <div className="mt-auto rounded-xl border border-palco-gold/20 bg-palco-gold/5 p-2.5">
                 <div className="flex items-end justify-between gap-[3px] h-6 px-1">
                   {[12, 22, 14, 24, 18, 20, 16, 22, 10, 18, 12, 14].map((height, i) => (
@@ -141,33 +162,35 @@ function HeroMonitor() {
                   ))}
                 </div>
                 <div className="mt-2.5 flex items-center justify-between text-[9px] font-black uppercase text-palco-text-muted">
-                  <span>01:28</span>
-                  <span className="text-palco-gold">1.245 ouvintes</span>
+                  <span>{room?.genre || 'Brasil'}</span>
+                  <span className="text-palco-gold">
+                    {room?.listener_count || 0} {(room?.listener_count || 0) === 1 ? 'ouvinte' : 'ouvintes'}
+                  </span>
                 </div>
               </div>
-
             </div>
           </div>
         </div>
       </div>
-      
-      {/* Stand bases of the monitor */}
       <div className="mx-auto h-3 w-36 rounded-b-2xl bg-[#0b0b0d] border-x border-b border-white/5 shadow-md" />
       <div className="mx-auto h-1.5 w-60 rounded-full bg-black/80 blur-[1px]" />
     </div>
   );
 }
 
-function QrPanel() {
+function QrPanel({ room, artist }) {
+  const destination = room && artist
+    ? getArtistInteractionUrl(room.id, artist.id)
+    : '/rooms';
   const qrValue = typeof window !== 'undefined'
-    ? `${window.location.origin}/rooms`
-    : 'https://palco.app/rooms';
+    ? `${window.location.origin}${destination}`
+    : `https://palco-app-drab.vercel.app${destination}`;
 
   return (
     <aside className="rounded-[1.5rem] border border-palco-gold/45 bg-black/60 p-6 shadow-[0_0_40px_rgba(212,168,67,0.1)] flex flex-col justify-between w-full max-w-[320px] mx-auto">
       <div>
         <p className="text-center text-xs font-black uppercase tracking-[0.2em] text-palco-gold">
-          INTERAJA AGORA
+          {artist ? 'INTERAJA NESTA LIVE' : 'ENCONTRE UMA LIVE'}
         </p>
         
         <div className="mx-auto my-5 w-fit rounded-2xl bg-white p-3 shadow-2xl border border-palco-gold/30">
@@ -175,7 +198,9 @@ function QrPanel() {
         </div>
         
         <p className="text-center text-xs font-semibold text-palco-text-muted leading-relaxed px-2">
-          Escaneie para pedir música, votar e mandar gorjeta.
+          {artist
+            ? `Pedidos, votos e gorjetas vão direto para ${artist.name}.`
+            : 'Escaneie para escolher uma sala e encontrar artistas ao vivo.'}
         </p>
       </div>
 
@@ -198,11 +223,20 @@ function QrPanel() {
 
 export default function HomePage() {
   const { isAuthenticated } = useAuth();
-  const { rooms, loading: roomsLoading } = useRooms();
+  const { rooms, loading: roomsLoading, error: roomsError } = useRooms();
   const navigate = useNavigate();
 
-  // Filter 3 active or beautiful rooms to showcase
   const featuredRooms = rooms.slice(0, 3);
+  const heroRoom = rooms.find((room) => getActiveArtists(room).length > 0) || rooms[0] || null;
+  const heroArtists = getActiveArtists(heroRoom);
+  const heroArtist = heroArtists[0] || null;
+
+  function openRoom(room, artist = null) {
+    const path = artist
+      ? `/room/${encodeURIComponent(room.id)}?artist=${encodeURIComponent(artist.id)}`
+      : `/room/${encodeURIComponent(room.id)}`;
+    navigate(isAuthenticated ? path : getLoginUrl(path));
+  }
 
   return (
     <div className="overflow-hidden bg-palco-black text-palco-text">
@@ -250,10 +284,15 @@ export default function HomePage() {
             </div>
 
             {/* COLUMN 2: Television Monitor Widget */}
-            <HeroMonitor />
+            <HeroMonitor
+              room={heroRoom}
+              artists={heroArtists}
+              loading={roomsLoading}
+              onOpen={() => heroRoom && openRoom(heroRoom, heroArtist)}
+            />
 
             {/* COLUMN 3: QR Code Info Widget */}
-            <QrPanel />
+            <QrPanel room={heroRoom} artist={heroArtist} />
 
           </div>
         </div>
@@ -283,6 +322,8 @@ export default function HomePage() {
             <div className="flex items-center justify-center py-12">
               <Spinner size="lg" />
             </div>
+          ) : roomsError ? (
+            <Alert type="error" message={roomsError} />
           ) : featuredRooms.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-palco-border p-12 text-center text-palco-text-muted">
               Nenhuma sala ativa no momento. Crie ou configure um show no painel!
@@ -290,12 +331,11 @@ export default function HomePage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {featuredRooms.map((room) => {
-                // Get active performers in room
-                const activeArtistList = room.room_artists?.map(ra => ra.artist?.name) || [];
+                const activeArtistList = getActiveArtists(room);
                 const isLive = activeArtistList.length > 0;
 
                 return (
-                  <Card key={room.id} hover className="flex flex-col justify-between p-6 cursor-pointer" onClick={() => navigate(`/room/${room.id}`)}>
+                  <Card key={room.id} hover className="flex flex-col justify-between p-6 cursor-pointer" onClick={() => openRoom(room, activeArtistList[0])}>
                     <div>
                       <div className="flex items-center justify-between gap-3 mb-4">
                         <Badge variant="gold" className="text-[10px]">{room.genre || 'Estilo'}</Badge>
@@ -321,7 +361,7 @@ export default function HomePage() {
                         <div className="mt-5 border-t border-palco-border/50 pt-4">
                           <p className="text-[10px] font-black uppercase tracking-widest text-palco-gold mb-1.5">No Palco</p>
                           <p className="text-xs font-semibold text-white truncate">
-                            🎙️ {activeArtistList.join(', ')}
+                            🎙️ {activeArtistList.map((artist) => artist.name).join(', ')}
                           </p>
                         </div>
                       )}

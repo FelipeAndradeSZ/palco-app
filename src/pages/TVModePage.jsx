@@ -13,6 +13,7 @@ import { useRooms } from '../hooks/useRooms';
 import { useAuth } from '../hooks/useAuth';
 import { useRoomRealtime } from '../hooks/useRoomRealtime';
 import { useRoomMediaStream } from '../hooks/useRoomMediaStream';
+import { joinRoom, leaveRoom } from '../services/roomService';
 import { getVenueProfile, upsertVenueProfile } from '../services/venueService';
 import { createSubscriptionCheckout, getActiveSubscription } from '../services/subscriptionService';
 import Badge from '../components/ui/Badge';
@@ -133,6 +134,20 @@ export default function TVModePage() {
     const vibeOk = !venueConfig.vibe_level || !room.vibe_level || room.vibe_level === venueConfig.vibe_level;
     return genreOk && vibeOk;
   });
+
+  useEffect(() => {
+    if (!activeRoomId || !profile?.id) return undefined;
+
+    joinRoom(activeRoomId, profile.id, profile.role);
+    const timer = setInterval(() => {
+      joinRoom(activeRoomId, profile.id, profile.role);
+    }, 25_000);
+
+    return () => {
+      clearInterval(timer);
+      leaveRoom(activeRoomId, profile.id);
+    };
+  }, [activeRoomId, profile?.id, profile?.role]);
 
   // Conecta ao WebSocket da sala para chat, alertas e pedidos reais em tempo real
   const { tvAlerts, activeRequests, activeBattles, battleResults } = useRoomRealtime(activeRoomId, {

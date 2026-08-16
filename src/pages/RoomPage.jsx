@@ -9,6 +9,7 @@ import { createBattle, voteBattle } from '../services/battleService';
 import { useAuth } from '../hooks/useAuth';
 import Spinner from '../components/ui/Spinner';
 import Badge from '../components/ui/Badge';
+import Alert from '../components/ui/Alert';
 import RequestSongModal from '../components/features/bounty/RequestSongModal';
 import LiveStreamPlayer from '../components/features/video/LiveStreamPlayer';
 import TikTokInteractions from '../components/features/video/TikTokInteractions';
@@ -83,7 +84,7 @@ function ArtistSelectionScreen({ room, artists, onSelect }) {
   );
 }
 
-function LiveChat({ messages, isConnected, onSendMessage }) {
+function LiveChat({ messages, isConnected, onSendMessage, className = '' }) {
   const [inputText, setInputText] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState(null);
@@ -117,7 +118,7 @@ function LiveChat({ messages, isConnected, onSendMessage }) {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3">
+    <div className={`flex h-full min-h-0 flex-col gap-3 ${className}`}>
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
         {visibleMessages.length === 0 ? (
           <div className="rounded-2xl bg-black/35 px-4 py-3 text-sm text-palco-text-muted">
@@ -733,6 +734,7 @@ export default function RoomPage() {
 
   useEffect(() => {
     let isMounted = true;
+    let presenceTimer = null;
 
     async function setupRoom() {
       if (isMounted) {
@@ -748,7 +750,14 @@ export default function RoomPage() {
       if (isMounted) setRoom(roomData);
 
       if (profile?.id) {
-        await joinRoom(roomId, profile.id, profile.role);
+        const joinResult = await joinRoom(roomId, profile.id, profile.role);
+        if (joinResult.error && isMounted) {
+          setFeedback({ type: 'error', message: 'Nao foi possivel registrar sua presenca na sala.' });
+        } else {
+          presenceTimer = setInterval(() => {
+            joinRoom(roomId, profile.id, profile.role);
+          }, 25_000);
+        }
 
         const { data: walletData } = await getWallet(profile.id);
         if (isMounted && walletData) setWallet(walletData);
@@ -761,6 +770,7 @@ export default function RoomPage() {
 
     return () => {
       isMounted = false;
+      clearInterval(presenceTimer);
       if (profile?.id) {
         leaveRoom(roomId, profile.id);
       }
@@ -986,7 +996,7 @@ export default function RoomPage() {
       </div>
 
       <div className="mx-auto min-h-[calc(100vh-4rem)] max-w-7xl px-3 py-4 sm:px-5 lg:hidden">
-        <section className="relative min-h-[calc(100vh-6rem)] overflow-hidden rounded-3xl border border-palco-border bg-palco-black">
+        <section className="relative h-[calc(100svh-5.5rem)] min-h-[600px] max-h-[880px] overflow-hidden rounded-3xl border border-palco-border bg-palco-black">
           <LiveStreamPlayer
             stream={listenerMedia.remoteStream}
             status={listenEnabled ? listenerMedia.status : 'idle'}
@@ -1020,7 +1030,7 @@ export default function RoomPage() {
 
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-black/10 to-black/75" />
 
-          <div className="pointer-events-auto absolute left-4 right-4 top-16 flex items-center justify-between gap-3">
+          <div className="pointer-events-auto absolute left-4 right-4 top-4 z-40 flex items-center justify-between gap-3">
             <button
               type="button"
               onClick={handleBackToArtists}
@@ -1034,7 +1044,7 @@ export default function RoomPage() {
             </div>
           </div>
 
-          <div className="pointer-events-none absolute bottom-4 left-4 right-4 grid gap-4">
+          <div className="pointer-events-none absolute bottom-4 left-4 right-4 z-40 grid gap-4">
             <div className="min-w-0 pr-14">
               <div className="pointer-events-auto mb-4 flex items-center gap-3">
                 <ArtistAvatar artist={selectedArtist} />
@@ -1049,12 +1059,13 @@ export default function RoomPage() {
                 messages={messages}
                 isConnected={isConnected}
                 onSendMessage={sendChatMessage}
+                className="pointer-events-auto h-[min(32svh,240px)]"
               />
             </div>
           </div>
 
           {profile?.role === 'listener' && (
-            <div className="pointer-events-auto absolute right-3 top-1/2 flex -translate-y-1/2 flex-col gap-3">
+            <div className="pointer-events-auto absolute right-3 top-1/2 z-40 flex -translate-y-1/2 flex-col gap-3">
               {[
                 ['request', '♪'],
                 ['tip', 'R$'],
@@ -1092,6 +1103,26 @@ export default function RoomPage() {
             </div>
           )}
         </section>
+
+        {profile?.role === 'listener' && (
+          <div className="mt-3">
+            <WalletTopUp
+              wallet={wallet}
+              creditAmount={creditAmount}
+              setCreditAmount={setCreditAmount}
+              creditError={creditError}
+              setCreditError={setCreditError}
+              addingFunds={addingFunds}
+              onAddFunds={handleAddFunds}
+            />
+          </div>
+        )}
+
+        {profile?.role === 'listener' && activeAction === 'request' && feedback && (
+          <div className="mt-3">
+            <Alert type={feedback.type} message={feedback.message} />
+          </div>
+        )}
 
         {profile?.role === 'listener' && activeAction !== 'request' && (
           <div className="mt-3">

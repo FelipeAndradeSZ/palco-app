@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import Stripe from 'https://esm.sh/stripe@14.17.0'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { assertAllowedOrigin, corsHeaders, errorResponse, HttpError, jsonResponse } from '../_shared/http.ts'
 
 const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') as string, {
   apiVersion: '2023-10-16',
@@ -9,68 +10,47 @@ const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') as string, {
 const supabaseUrl = Deno.env.get('SUPABASE_URL') as string
 const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') as string
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
-
 function safeReturnPath(value: unknown) {
   if (typeof value !== 'string') return '/rooms'
   if (!value.startsWith('/') || value.startsWith('//') || value.includes('\\')) return '/rooms'
   return value
 }
 
-function getRedirectOrigin(req: Request) {
-  const siteUrl = Deno.env.get('SITE_URL')
-  if (!siteUrl) throw new Error('SITE_URL nao configurada no Supabase')
-
-  const siteOrigin = new URL(siteUrl).origin
-  const allowedOrigins = new Set([
-    siteOrigin,
-    ...(Deno.env.get('ALLOWED_ORIGINS') || '')
-      .split(',')
-      .map((value) => value.trim())
-      .filter(Boolean)
-      .map((value) => new URL(value).origin),
-  ])
-  const requestOrigin = req.headers.get('origin')
-
-  return requestOrigin && allowedOrigins.has(requestOrigin) ? requestOrigin : siteOrigin
-}
-
 serve(async (req) => {
-  // CORS Preflight
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    try {
+      assertAllowedOrigin(req)
+      return new Response('ok', { headers: corsHeaders(req) })
+    } catch (error) {
+      return errorResponse(req, error)
+    }
   }
 
   try {
-    // SEGURANÇA: Verificar autenticação JWT
+    if (req.method !== 'POST') throw new HttpError(405, 'Metodo nao permitido')
+    const origin = assertAllowedOrigin(req)
     const authHeader = req.headers.get('Authorization')
-    if (!authHeader) throw new Error('Usuário não autenticado')
+    if (!authHeader) throw new HttpError(401, 'Usuario nao autenticado')
 
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     })
     const { data: authData, error: authError } = await supabase.auth.getUser()
-    if (authError || !authData.user) throw new Error('Usuário não autenticado')
+    if (authError || !authData.user) throw new HttpError(401, 'Usuario nao autenticado')
 
     const { amount, userId, returnTo } = await req.json()
     const checkoutAmount = Number(amount)
     const returnPath = safeReturnPath(returnTo)
-    const origin = getRedirectOrigin(req)
-
     if (!checkoutAmount || !userId) {
-      throw new Error('Amount and UserId are required')
+      throw new HttpError(422, 'Valor e usuario sao obrigatorios')
     }
 
-    // SEGURANÇA: O userId do body deve ser do próprio usuário autenticado
     if (userId !== authData.user.id) {
-      throw new Error('Não é permitido criar recarga para outro usuário')
+      throw new HttpError(403, 'Nao e permitido criar recarga para outro usuario')
     }
 
     if (!Number.isFinite(checkoutAmount) || checkoutAmount < 5 || checkoutAmount > 5000) {
-      throw new Error('Amount must be between R$ 5 and R$ 5000')
+      throw new HttpError(422, 'O valor deve ficar entre R$ 5 e R$ 5.000')
     }
 
     const session = await stripe.checkout.sessions.create({
@@ -99,14 +79,9 @@ serve(async (req) => {
       }
     })
 
-    return new Response(
-      JSON.stringify({ url: session.url }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    return jsonResponse(req, { url: session.url })
   } catch (error) {
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    console.error('[PALCO create-checkout]', error)
+    return errorResponse(req, error)
   }
 })

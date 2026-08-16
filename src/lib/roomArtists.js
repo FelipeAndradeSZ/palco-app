@@ -1,3 +1,25 @@
+export const LIVE_PRESENCE_TIMEOUT_MS = 90_000;
+
+export function isLiveArtistEntry(entry, now = Date.now()) {
+  if (!entry || (entry.status && entry.status !== 'live')) return false;
+  if (!entry.last_heartbeat_at) return true;
+
+  const heartbeat = new Date(entry.last_heartbeat_at).getTime();
+  return Number.isFinite(heartbeat) && heartbeat > now - LIVE_PRESENCE_TIMEOUT_MS;
+}
+
+export function hasVisibleArtistChange(payload) {
+  if (payload?.eventType !== 'UPDATE') return true;
+
+  const previous = payload.old || {};
+  const current = payload.new || {};
+  const ignoredKeys = new Set(['last_heartbeat_at', 'updated_at']);
+
+  return Object.keys(current).some((key) => (
+    !ignoredKeys.has(key) && current[key] !== previous[key]
+  ));
+}
+
 export function normalizeArtistEntry(entry) {
   if (!entry) return null;
 
@@ -17,6 +39,7 @@ export function normalizeArtistEntry(entry) {
     is_featured: Boolean(entry.is_featured),
     performance_order: entry.performance_order || 0,
     current_song: entry.current_song || null,
+    last_heartbeat_at: entry.last_heartbeat_at || null,
     quality_tier: details?.quality_tier || entry.quality_tier || null,
     main_genre: details?.main_genre || entry.main_genre || null,
     rating: details?.rating || entry.rating || null,
@@ -26,6 +49,7 @@ export function normalizeArtistEntry(entry) {
 export function getActiveArtists(room) {
   if (!room) return [];
 
+  const hasArtistCollection = Array.isArray(room.active_artists) || Array.isArray(room.room_artists);
   const roomArtists = Array.isArray(room.active_artists)
     ? room.active_artists
     : Array.isArray(room.room_artists)
@@ -33,7 +57,7 @@ export function getActiveArtists(room) {
       : [];
 
   const activeArtists = roomArtists
-    .filter((entry) => !entry.status || entry.status === 'live')
+    .filter((entry) => isLiveArtistEntry(entry))
     .map(normalizeArtistEntry)
     .filter(Boolean);
 
@@ -44,7 +68,7 @@ export function getActiveArtists(room) {
     });
   }
 
-  if (room.current_artist) {
+  if (!hasArtistCollection && room.current_artist) {
     return [
       normalizeArtistEntry({
         artist: room.current_artist,

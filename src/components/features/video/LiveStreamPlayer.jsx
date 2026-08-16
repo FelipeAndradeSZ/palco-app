@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 const STATUS_LABELS = {
   idle: 'Pronto para conectar',
   connecting: 'Conectando...',
+  reconnecting: 'Reconectando...',
   waiting_artist: 'Aguardando o artista',
   ready: 'Transmissão pronta',
   live: 'Ao vivo',
@@ -27,6 +28,7 @@ export default function LiveStreamPlayer({
   showInfo = true,
 }) {
   const videoRef = useRef(null);
+  const [playbackBlocked, setPlaybackBlocked] = useState(false);
 
   const hasMedia = useMemo(() => {
     return Boolean(stream?.getTracks?.().some((track) => track.readyState === 'live'));
@@ -37,9 +39,22 @@ export default function LiveStreamPlayer({
     videoRef.current.srcObject = stream || null;
 
     if (stream) {
-      videoRef.current.play().catch(() => {});
+      videoRef.current.play()
+        .then(() => setPlaybackBlocked(false))
+        .catch(() => setPlaybackBlocked(true));
+    } else {
+      setPlaybackBlocked(false);
     }
   }, [stream]);
+
+  async function resumePlayback() {
+    try {
+      await videoRef.current?.play();
+      setPlaybackBlocked(false);
+    } catch {
+      setPlaybackBlocked(true);
+    }
+  }
 
   return (
     <div className={`relative flex w-full items-center justify-center overflow-hidden rounded-2xl border border-palco-border bg-palco-black shadow-2xl ${className}`}>
@@ -102,6 +117,18 @@ export default function LiveStreamPlayer({
             {error || subtitle}
           </p>
         </div>
+      )}
+
+      {hasMedia && playbackBlocked && !muted && (
+        <button
+          type="button"
+          onClick={resumePlayback}
+          className="absolute inset-0 z-50 flex items-center justify-center bg-black/45 text-sm font-black text-white backdrop-blur-sm"
+        >
+          <span className="rounded-xl bg-palco-gold px-5 py-3 text-palco-black shadow-xl">
+            Ativar som ao vivo
+          </span>
+        </button>
       )}
     </div>
   );

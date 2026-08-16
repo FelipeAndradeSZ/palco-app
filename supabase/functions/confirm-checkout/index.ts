@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import Stripe from 'https://esm.sh/stripe@14.17.0'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { assertAllowedOrigin, corsHeaders, errorResponse, HttpError, jsonResponse } from '../_shared/http.ts'
 
 const stripeSecretKey = Deno.env.get('STRIPE_SECRET_KEY')
 const supabaseUrl = Deno.env.get('SUPABASE_URL')
@@ -11,27 +12,27 @@ const stripe = new Stripe(stripeSecretKey as string, {
   apiVersion: '2023-10-16',
 })
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    try {
+      assertAllowedOrigin(req)
+      return new Response('ok', { headers: corsHeaders(req) })
+    } catch (error) {
+      return errorResponse(req, error)
+    }
   }
 
   try {
-    if (!stripeSecretKey) throw new Error('STRIPE_SECRET_KEY nao configurada no Supabase')
-    if (!supabaseUrl) throw new Error('SUPABASE_URL nao configurada no Supabase')
-    if (!supabaseAnonKey) throw new Error('SUPABASE_ANON_KEY nao configurada no Supabase')
-    if (!supabaseServiceRoleKey) throw new Error('SUPABASE_SERVICE_ROLE_KEY nao configurada no Supabase')
+    if (req.method !== 'POST') throw new HttpError(405, 'Metodo nao permitido')
+    assertAllowedOrigin(req)
+    if (!stripeSecretKey || !supabaseUrl || !supabaseAnonKey || !supabaseServiceRoleKey) {
+      throw new HttpError(503, 'Pagamentos temporariamente indisponiveis')
+    }
 
     const authHeader = req.headers.get('Authorization')
+    if (!authHeader) throw new HttpError(401, 'Usuario nao autenticado')
     const { sessionId } = await req.json()
-
-    if (!authHeader) throw new Error('Usuario nao autenticado')
-    if (!sessionId) throw new Error('Sessao de pagamento ausente')
+    if (!sessionId) throw new HttpError(422, 'Sessao de pagamento ausente')
 
     const supabaseAuth = createClient(
       supabaseUrl,
@@ -40,26 +41,26 @@ serve(async (req) => {
     )
 
     const { data: authData, error: authError } = await supabaseAuth.auth.getUser()
-    if (authError || !authData.user) throw new Error('Usuario nao autenticado')
+    if (authError || !authData.user) throw new HttpError(401, 'Usuario nao autenticado')
 
     const session = await stripe.checkout.sessions.retrieve(sessionId)
     const userId = session.client_reference_id || session.metadata?.userId
     const amount = Number(session.amount_total || 0) / 100
 
     if (userId !== authData.user.id) {
-      throw new Error('Esta recarga pertence a outro usuario')
+      throw new HttpError(403, 'Esta recarga pertence a outro usuario')
     }
 
     if (session.payment_status !== 'paid') {
-      throw new Error('Pagamento ainda nao confirmado')
+      throw new HttpError(409, 'Pagamento ainda nao confirmado')
     }
 
     if (session.mode !== 'payment' || session.currency !== 'brl') {
-      throw new Error('Sessao de pagamento invalida')
+      throw new HttpError(422, 'Sessao de pagamento invalida')
     }
 
     if (!Number.isFinite(amount) || amount < 5 || amount > 5000) {
-      throw new Error('Valor confirmado fora dos limites permitidos')
+      throw new HttpError(422, 'Valor confirmado fora dos limites permitidos')
     }
 
     const supabaseAdmin = createClient(
@@ -75,15 +76,11 @@ serve(async (req) => {
 
     if (error) throw error
 
-    return new Response(
-      JSON.stringify({ ok: true, balance: data, amount }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    return jsonResponse(req, { ok: true, balance: data, amount })
   } catch (error) {
     console.error('[PALCO confirm-checkout]', error)
-    return new Response(
-      JSON.stringify({ ok: false, error: error.message }),
-      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    const response = errorResponse(req, error)
+    const payload = await response.json()
+    return jsonResponse(req, { ok: false, ...payload }, response.status)
   }
 })

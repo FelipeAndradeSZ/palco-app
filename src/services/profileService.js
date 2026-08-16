@@ -66,3 +66,12 @@ export async function upsertArtistDetails(profileId, updates) {
 
   return { data, error };
 }
+
+export async function completeOnboarding(role, mainGenre = null) {
+  const { data, error } = await supabase.rpc('complete_profile_onboarding', {
+    p_role: role,
+    p_main_genre: mainGenre || null,
+  });
+
+  return { data, error };
+}

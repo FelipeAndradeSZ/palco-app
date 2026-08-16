@@ -18,7 +18,18 @@ export async function createSubscriptionCheckout(planTier, returnTo = '/tv') {
     body: { planTier, returnTo },
   });
 
-  if (error) throw error;
+  if (error) {
+    let message = error.message || 'Nao foi possivel iniciar a assinatura.';
+    try {
+      if (error.context) {
+        const details = await error.context.json();
+        message = details?.error || message;
+      }
+    } catch {
+      // Preserve the original function error when the response cannot be decoded.
+    }
+    throw new Error(message);
+  }
   if (!data?.url) throw new Error('Checkout de assinatura nao retornou URL.');
 
   window.location.href = data.url;
