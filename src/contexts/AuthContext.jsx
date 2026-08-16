@@ -24,13 +24,23 @@ export function AuthProvider({ children }) {
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState(null);
   const profileRequestRef = useRef(null);
+  const activeUserIdRef = useRef(null);
+  const profileLoadTokenRef = useRef(0);
 
   /**
    * Carrega o perfil completo do banco após auth.
    * Inclui artist_details/venue_details via join.
    */
-  const loadProfile = useCallback(() => {
-    if (profileRequestRef.current) return profileRequestRef.current;
+  const loadProfile = useCallback((expectedUserId = activeUserIdRef.current) => {
+    if (!expectedUserId) {
+      return Promise.resolve({ data: null, error: new Error('Usuario nao autenticado.') });
+    }
+
+    if (profileRequestRef.current?.userId === expectedUserId) {
+      return profileRequestRef.current.promise;
+    }
+
+    const loadToken = ++profileLoadTokenRef.current;
 
     setProfileLoading(true);
     setProfileError(null);
@@ -40,20 +50,30 @@ export function AuthProvider({ children }) {
         const { data, error: loadError } = await getOwnProfile();
         if (loadError) throw loadError;
         if (!data) throw new Error('Perfil nao encontrado.');
+        if (activeUserIdRef.current !== expectedUserId || profileLoadTokenRef.current !== loadToken) {
+          return { data: null, error: null, stale: true };
+        }
         setProfile(data);
         return { data, error: null };
       } catch (err) {
+        if (activeUserIdRef.current !== expectedUserId || profileLoadTokenRef.current !== loadToken) {
+          return { data: null, error: null, stale: true };
+        }
         console.error('[PALCO] Erro ao carregar perfil:', err);
         setProfile(null);
         setProfileError(err.message || 'Nao foi possivel carregar seu perfil.');
         return { data: null, error: err };
       } finally {
-        setProfileLoading(false);
-        profileRequestRef.current = null;
+        if (activeUserIdRef.current === expectedUserId && profileLoadTokenRef.current === loadToken) {
+          setProfileLoading(false);
+        }
+        if (profileRequestRef.current?.token === loadToken) {
+          profileRequestRef.current = null;
+        }
       }
     })();
 
-    profileRequestRef.current = request;
+    profileRequestRef.current = { userId: expectedUserId, token: loadToken, promise: request };
     return request;
   }, []);
 
@@ -70,8 +90,9 @@ export function AuthProvider({ children }) {
       try {
         const { session } = await authService.getSession();
         if (isMounted && session?.user) {
+          activeUserIdRef.current = session.user.id;
           setUser(session.user);
-          await loadProfile();
+          await loadProfile(session.user.id);
         }
       } catch (err) {
         console.error('[PALCO] Erro na inicialização de auth:', err);
@@ -89,6 +110,7 @@ export function AuthProvider({ children }) {
       if (!isMounted) return;
 
       if (event === 'SIGNED_IN' && session?.user) {
+        activeUserIdRef.current = session.user.id;
         setUser(session.user);
         setError(null);
         setProfileLoading(true);
@@ -98,10 +120,13 @@ export function AuthProvider({ children }) {
 
         clearTimeout(deferredProfileLoad);
         deferredProfileLoad = setTimeout(() => {
-          if (isMounted) void loadProfile();
+          if (isMounted) void loadProfile(session.user.id);
         }, 0);
       } else if (event === 'SIGNED_OUT') {
         clearTimeout(deferredProfileLoad);
+        activeUserIdRef.current = null;
+        profileLoadTokenRef.current += 1;
+        profileRequestRef.current = null;
         setUser(null);
         setProfile(null);
         setProfileError(null);
@@ -186,7 +211,7 @@ export function AuthProvider({ children }) {
    */
   const refreshProfile = useCallback(async () => {
     if (user?.id) {
-      await loadProfile();
+      await loadProfile(user.id);
     }
   }, [user, loadProfile]);
 
