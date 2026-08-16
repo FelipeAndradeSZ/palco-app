@@ -174,18 +174,18 @@ export function AuthProvider({ children }) {
     setError(null);
     setLoading(true);
     try {
-      const { error: signUpError } = await authService.signUp({
+      const { data: signUpData, error: signUpError } = await authService.signUp({
         email, password, name, role, mainGenre,
       });
       if (signUpError) {
         setError(signUpError.message);
-        return { error: signUpError };
+        return { data: null, error: signUpError };
       }
-      return { error: null };
+      return { data: signUpData, error: null };
     } catch {
       const message = 'Erro inesperado no cadastro. Tente novamente.';
       setError(message);
-      return { error: { message } };
+      return { data: null, error: { message } };
     } finally {
       setLoading(false);
     }

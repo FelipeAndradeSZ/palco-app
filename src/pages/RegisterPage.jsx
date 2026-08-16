@@ -4,17 +4,19 @@
  * Redirect para home se já autenticado.
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import RegisterForm from '../components/features/auth/RegisterForm';
 import { getSafeReturnPath } from '../lib/navigation';
+import Alert from '../components/ui/Alert';
 
 export default function RegisterPage() {
   const { signUp, loading, error, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const returnTo = getSafeReturnPath(searchParams.get('returnTo'));
+  const [pendingEmail, setPendingEmail] = useState(null);
 
   // Redirect se já logado
   useEffect(() => {
@@ -25,8 +27,10 @@ export default function RegisterPage() {
 
   async function handleRegister(data) {
     const result = await signUp(data);
-    if (!result.error) {
+    if (!result.error && result.data?.session) {
       navigate(returnTo, { replace: true });
+    } else if (!result.error) {
+      setPendingEmail(result.data?.user?.email || data.email);
     }
   }
 
@@ -50,12 +54,27 @@ export default function RegisterPage() {
 
         {/* Card do formulário */}
         <div className="bg-palco-card border border-palco-border rounded-2xl p-8">
-          <RegisterForm
-            onSubmit={handleRegister}
-            loading={loading}
-            error={error}
-            returnTo={returnTo}
-          />
+          {pendingEmail ? (
+            <div className="space-y-5">
+              <Alert
+                type="success"
+                message={`Conta criada. Confirme o link enviado para ${pendingEmail} antes de entrar.`}
+              />
+              <Link
+                to={`/login?returnTo=${encodeURIComponent(returnTo)}`}
+                className="flex w-full justify-center rounded-xl bg-palco-gold px-5 py-3 text-sm font-black text-palco-black"
+              >
+                Ir para o login
+              </Link>
+            </div>
+          ) : (
+            <RegisterForm
+              onSubmit={handleRegister}
+              loading={loading}
+              error={error}
+              returnTo={returnTo}
+            />
+          )}
         </div>
 
         {/* Link para login */}
