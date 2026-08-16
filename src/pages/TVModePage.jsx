@@ -142,8 +142,12 @@ export default function TVModePage() {
     let cancelled = false;
 
     async function refreshPresence() {
-      const { error } = await joinRoom(activeRoomId, profile.id, profile.role);
-      if (!cancelled) setPresenceRoomId(error ? null : activeRoomId);
+      const result = await joinRoom(activeRoomId, profile.id, profile.role);
+      if (cancelled) {
+        if (!result.error) await leaveRoom(activeRoomId, profile.id);
+        return;
+      }
+      setPresenceRoomId(result.error ? null : activeRoomId);
     }
 
     refreshPresence();
@@ -153,7 +157,7 @@ export default function TVModePage() {
       cancelled = true;
       clearInterval(timer);
       setPresenceRoomId((current) => current === activeRoomId ? null : current);
-      leaveRoom(activeRoomId, profile.id);
+      void leaveRoom(activeRoomId, profile.id);
     };
   }, [activeRoomId, profile?.id, profile?.role]);
 

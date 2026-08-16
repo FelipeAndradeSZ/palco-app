@@ -11,7 +11,7 @@
  * - error: último erro de auth (null se tudo ok)
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import * as authService from '../services/authService';
 import { getOwnProfile } from '../services/profileService';
 import { AuthContext } from './AuthContextObject';
@@ -21,24 +21,40 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true); // true até verificar sessão inicial
   const [error, setError] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileError, setProfileError] = useState(null);
+  const profileRequestRef = useRef(null);
 
   /**
    * Carrega o perfil completo do banco após auth.
    * Inclui artist_details/venue_details via join.
    */
-  const loadProfile = useCallback(async () => {
-    try {
-      const { data, error: profileError } = await getOwnProfile();
-      if (profileError) {
-        console.error('[PALCO] Erro ao carregar perfil:', profileError.message);
+  const loadProfile = useCallback(() => {
+    if (profileRequestRef.current) return profileRequestRef.current;
+
+    setProfileLoading(true);
+    setProfileError(null);
+
+    const request = (async () => {
+      try {
+        const { data, error: loadError } = await getOwnProfile();
+        if (loadError) throw loadError;
+        if (!data) throw new Error('Perfil nao encontrado.');
+        setProfile(data);
+        return { data, error: null };
+      } catch (err) {
+        console.error('[PALCO] Erro ao carregar perfil:', err);
         setProfile(null);
-        return;
+        setProfileError(err.message || 'Nao foi possivel carregar seu perfil.');
+        return { data: null, error: err };
+      } finally {
+        setProfileLoading(false);
+        profileRequestRef.current = null;
       }
-      setProfile(data);
-    } catch (err) {
-      console.error('[PALCO] Erro inesperado ao carregar perfil:', err);
-      setProfile(null);
-    }
+    })();
+
+    profileRequestRef.current = request;
+    return request;
   }, []);
 
   /**
@@ -75,6 +91,7 @@ export function AuthProvider({ children }) {
       if (event === 'SIGNED_IN' && session?.user) {
         setUser(session.user);
         setError(null);
+        setProfileLoading(true);
 
         // O OnboardingModal cuida da seleção de role para novos usuários OAuth.
         // Não usamos mais localStorage para pending_role (vetor de escalação de privilégio).
@@ -87,6 +104,8 @@ export function AuthProvider({ children }) {
         clearTimeout(deferredProfileLoad);
         setUser(null);
         setProfile(null);
+        setProfileError(null);
+        setProfileLoading(false);
         setError(null);
       } else if (event === 'TOKEN_REFRESHED' && session?.user) {
         setUser(session.user);
@@ -174,8 +193,9 @@ export function AuthProvider({ children }) {
   const value = {
     user,
     profile,
-    loading,
+    loading: loading || profileLoading,
     error,
+    profileError,
     signIn: handleSignIn,
     signUp: handleSignUp,
     signOut: handleSignOut,

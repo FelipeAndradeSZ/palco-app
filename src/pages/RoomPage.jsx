@@ -744,6 +744,7 @@ export default function RoomPage() {
         setPresenceReady(false);
       }
       const { data: roomData, error: roomError } = await getRoomById(roomId);
+      if (!isMounted) return;
       if (roomError || !roomData) {
         navigate('/rooms');
         return;
@@ -754,16 +755,21 @@ export default function RoomPage() {
       if (profile?.id) {
         async function refreshPresence() {
           const joinResult = await joinRoom(roomId, profile.id, profile.role);
-          if (!isMounted) return;
+          if (!isMounted) {
+            if (!joinResult.error) await leaveRoom(roomId, profile.id);
+            return false;
+          }
           if (joinResult.error) {
             setPresenceReady(false);
             setFeedback({ type: 'error', message: 'Nao foi possivel registrar sua presenca na sala.' });
           } else {
             setPresenceReady(true);
           }
+          return !joinResult.error;
         }
 
         await refreshPresence();
+        if (!isMounted) return;
         presenceTimer = setInterval(refreshPresence, 25_000);
 
         const { data: walletData } = await getWallet(profile.id);
@@ -779,7 +785,7 @@ export default function RoomPage() {
       isMounted = false;
       clearInterval(presenceTimer);
       if (profile?.id) {
-        leaveRoom(roomId, profile.id);
+        void leaveRoom(roomId, profile.id);
       }
     };
   }, [roomId, profile, navigate]);
