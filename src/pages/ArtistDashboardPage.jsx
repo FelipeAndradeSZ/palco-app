@@ -165,6 +165,10 @@ export default function ArtistDashboardPage() {
     }
   }, [artistPixKey, profileId]);
 
+  const refreshFinancialActivity = useCallback(() => {
+    void loadWalletData();
+  }, [loadWalletData]);
+
   const loadBookings = useCallback(async () => {
     if (!profileId) return;
     setBookingsLoading(true);
@@ -286,6 +290,7 @@ export default function ArtistDashboardPage() {
 
   const { activeRequests, activeBattles, messages, isConnected, sendChatMessage, tvAlerts } = useRoomRealtime(activeRoomId, {
     targetArtistId: profile?.id || null,
+    onFinancialActivity: refreshFinancialActivity,
   });
   const mediaStream = useRoomMediaStream({
     roomId: activeRoomId,

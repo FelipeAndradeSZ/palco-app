@@ -11,7 +11,12 @@ import { isRequestVisibleToArtist } from '../lib/requestVisibility';
 export function useRoomRealtime(roomId, options = {}) {
   const { user } = useAuth();
   const userId = user?.id;
-  const { onRoomUpdate, onLikeReceived, targetArtistId = null } = options;
+  const {
+    onRoomUpdate,
+    onLikeReceived,
+    onFinancialActivity,
+    targetArtistId = null,
+  } = options;
   const [messages, setMessages] = useState([]);
   const [activeRequests, setActiveRequests] = useState([]);
   const [activeBattles, setActiveBattles] = useState([]);
@@ -182,6 +187,7 @@ export function useRoomRealtime(roomId, options = {}) {
             message_type: 'tip_alert',
             content: `R$ ${Number(interaction.amount || 0).toFixed(2)}${interaction.message ? ` - ${interaction.message}` : ''}`,
           });
+          onFinancialActivity?.(interaction);
         }
       },
       onBattleUpdate: ({ eventType, newRecord, oldRecord }) => {
@@ -195,6 +201,7 @@ export function useRoomRealtime(roomId, options = {}) {
         } else if (eventType === 'UPDATE') {
           if (newRecord.status === 'finished' || newRecord.status === 'cancelled') {
             setActiveBattles((prev) => prev.filter((battle) => battle.id !== newRecord.id));
+            onFinancialActivity?.(newRecord);
           } else {
             setActiveBattles((prev) =>
               prev.map((battle) => (battle.id === newRecord.id ? { ...battle, ...newRecord } : battle))
@@ -228,7 +235,7 @@ export function useRoomRealtime(roomId, options = {}) {
       unsubscribeFromRoom(channelRef.current);
       channelRef.current = null;
     };
-  }, [appendMessage, roomId, resolveMessageSender, triggerTvAlert, onRoomUpdate, onLikeReceived, targetArtistId]);
+  }, [appendMessage, roomId, resolveMessageSender, triggerTvAlert, onRoomUpdate, onLikeReceived, onFinancialActivity, targetArtistId]);
 
   const sendChatMessage = useCallback(async (content) => {
     if (!userId || !roomId) return { error: { message: 'Nao autorizado' } };
