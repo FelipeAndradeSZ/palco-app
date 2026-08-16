@@ -18,11 +18,20 @@ export default function Header() {
   const { isAuthenticated, isArtist, isVenue, profile, user, signOut } = useAuth();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const [logoutError, setLogoutError] = useState(null);
 
   const handleSignOut = async () => {
-    await signOut();
+    setSigningOut(true);
+    setLogoutError(null);
+    const result = await signOut();
+    setSigningOut(false);
+    if (result?.error) {
+      setLogoutError(result.error.message || 'Nao foi possivel sair da conta.');
+      return;
+    }
     setMobileOpen(false);
-    navigate('/');
+    navigate('/', { replace: true });
   };
 
   const closeMobile = () => setMobileOpen(false);
@@ -121,7 +130,7 @@ export default function Header() {
                 </span>
               </Link>
 
-              <Button variant="ghost" size="sm" onClick={handleSignOut}>
+              <Button variant="ghost" size="sm" onClick={handleSignOut} loading={signingOut}>
                 Sair
               </Button>
             </>
@@ -237,9 +246,10 @@ export default function Header() {
                 <button
                   type="button"
                   onClick={handleSignOut}
+                  disabled={signingOut}
                   className="rounded-lg px-3 py-2.5 text-left text-sm font-medium text-palco-live hover:bg-palco-live/10 transition-colors cursor-pointer"
                 >
-                  Sair
+                  {signingOut ? 'Saindo...' : 'Sair'}
                 </button>
               </>
             ) : (
@@ -254,6 +264,15 @@ export default function Header() {
             )}
           </div>
         </nav>
+      )}
+
+      {logoutError && (
+        <div
+          role="alert"
+          className="absolute left-1/2 top-[calc(100%+0.5rem)] w-[min(92vw,28rem)] -translate-x-1/2 rounded-lg border border-palco-live/40 bg-palco-dark px-4 py-3 text-sm text-palco-live shadow-xl"
+        >
+          {logoutError}
+        </div>
       )}
 
       {/* ---- Keyframe animations (injected once) ---- */}

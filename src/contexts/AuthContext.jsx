@@ -88,7 +88,8 @@ export function AuthProvider({ children }) {
     // 1. Verificar sessão existente
     const initializeAuth = async () => {
       try {
-        const { session } = await authService.getSession();
+        const { session, error: sessionError } = await authService.getSession();
+        if (sessionError) throw sessionError;
         if (isMounted && session?.user) {
           activeUserIdRef.current = session.user.id;
           setUser(session.user);
@@ -196,11 +197,17 @@ export function AuthProvider({ children }) {
    */
   const handleSignOut = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
-      await authService.signOut();
+      const { error: signOutError } = await authService.signOut();
+      if (signOutError) throw signOutError;
+      return { error: null };
       // onAuthStateChange cuidará de limpar user/profile
     } catch (err) {
       console.error('[PALCO] Erro no logout:', err);
+      const logoutError = err instanceof Error ? err : new Error('Nao foi possivel sair da conta.');
+      setError(logoutError.message);
+      return { error: logoutError };
     } finally {
       setLoading(false);
     }

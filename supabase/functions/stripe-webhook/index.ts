@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import Stripe from 'https://esm.sh/stripe@14.17.0'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { getSubscriptionBillingPeriod } from '../_shared/stripeBillingPeriod.js'
 
 const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') as string, {
   apiVersion: '2023-10-16',
@@ -27,12 +28,7 @@ async function creditCheckoutSession(session: Stripe.Checkout.Session) {
     amount < 5 ||
     amount > 5000
   ) {
-    console.error('[PALCO stripe-webhook] Sessao sem dados suficientes', {
-      sessionId: session.id,
-      userId,
-      amount,
-    })
-    return
+    throw new Error(`Sessao de pagamento invalida: ${session.id || 'sem id'}`)
   }
 
   const supabase = getSupabaseAdmin()
@@ -55,12 +51,17 @@ function fromUnix(value: number | null | undefined) {
 async function syncSubscription(subscription: Stripe.Subscription) {
   const supabase = getSupabaseAdmin()
   const userId = subscription.metadata?.userId
-  const planTier = subscription.metadata?.planTier || 'basic'
+  const planTier = subscription.metadata?.planTier
 
   if (!userId) {
-    console.error('[PALCO stripe-webhook] Assinatura sem userId', subscription.id)
-    return
+    throw new Error(`Assinatura sem userId: ${subscription.id}`)
   }
+
+  if (!['basic', 'premium'].includes(planTier || '')) {
+    throw new Error(`Plano de assinatura invalido: ${subscription.id}`)
+  }
+
+  const billingPeriod = getSubscriptionBillingPeriod(subscription)
 
   const { error } = await supabase
     .from('subscriptions')
@@ -71,8 +72,8 @@ async function syncSubscription(subscription: Stripe.Subscription) {
         stripe_customer_id: String(subscription.customer || ''),
         plan_tier: planTier,
         status: subscription.status,
-        current_period_start: fromUnix(subscription.current_period_start),
-        current_period_end: fromUnix(subscription.current_period_end),
+        current_period_start: fromUnix(billingPeriod.start),
+        current_period_end: fromUnix(billingPeriod.end),
         cancel_at_period_end: Boolean(subscription.cancel_at_period_end),
       },
       { onConflict: 'stripe_subscription_id' }
