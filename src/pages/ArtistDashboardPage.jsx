@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, useEffect } from 'react';
+import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useRooms } from '../hooks/useRooms';
@@ -134,6 +134,7 @@ export default function ArtistDashboardPage() {
   const [bookingsLoading, setBookingsLoading] = useState(false);
   const [bookingProcessingId, setBookingProcessingId] = useState(null);
   const [bookingFeedback, setBookingFeedback] = useState(null);
+  const mediaFailureRoomRef = useRef(null);
 
   const artistDetails = profile?.artist_details?.[0] || profile?.artist_details || {};
   const profileId = profile?.id;
@@ -293,10 +294,48 @@ export default function ArtistDashboardPage() {
     enabled: Boolean(activeRoomId && profile?.id),
   });
 
+  useEffect(() => {
+    if (!activeRoomId || mediaStream.status !== 'error') return;
+    if (mediaFailureRoomRef.current === activeRoomId) return;
+
+    mediaFailureRoomRef.current = activeRoomId;
+    let cancelled = false;
+
+    async function removeUnavailableStream() {
+      setIsProcessing(true);
+      try {
+        await updateRoomArtist(activeRoomId, null);
+        if (!cancelled) {
+          setSelectedRoomId(null);
+          setLiveFeedback({
+            type: 'error',
+            message: mediaStream.error || 'A transmissao foi encerrada porque camera ou microfone ficaram indisponiveis.',
+          });
+        }
+        await refetchRooms();
+      } catch (err) {
+        if (!cancelled) {
+          setLiveFeedback({
+            type: 'error',
+            message: err.message || 'A midia falhou e nao foi possivel atualizar a sala.',
+          });
+        }
+      } finally {
+        if (!cancelled) setIsProcessing(false);
+      }
+    }
+
+    void removeUnavailableStream();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeRoomId, mediaStream.error, mediaStream.status, refetchRooms]);
+
 
   const handleGoLive = async (roomId) => {
     setIsProcessing(true);
     setLiveFeedback(null);
+    mediaFailureRoomRef.current = null;
     try {
       await updateRoomArtist(roomId, profile.id);
       setSelectedRoomId(roomId);

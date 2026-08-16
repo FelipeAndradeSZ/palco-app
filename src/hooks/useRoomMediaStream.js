@@ -155,6 +155,17 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
         track.contentHint = 'music';
       });
 
+      stream.getTracks().forEach((track) => {
+        track.onended = () => {
+          if (cancelled || localStreamRef.current !== stream) return;
+          setError('Camera ou microfone foi desconectado. Inicie a transmissao novamente.');
+          setStatus('error');
+          closeAllPeers();
+          stopLocalStream();
+          void sendSignal('artist-leave', { artistId });
+        };
+      });
+
       localStreamRef.current = stream;
       if (!cancelled) setLocalStream(stream);
       return stream;
