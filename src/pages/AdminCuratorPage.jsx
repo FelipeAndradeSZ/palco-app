@@ -5,7 +5,6 @@ import {
   getAdminStatus,
   getAdminWithdrawals,
   getArtistCandidates,
-  isAdminUser,
   rejectWithdrawal,
   updateArtistTier,
   MASTER_ADMIN_EMAIL,
@@ -37,8 +36,7 @@ export default function AdminCuratorPage() {
   const [withdrawalDialog, setWithdrawalDialog] = useState(null);
   const [rejectionReason, setRejectionReason] = useState('');
 
-  const clientAdmin = isAdminUser(user);
-  const canOpenAdmin = clientAdmin || serverAdmin;
+  const canOpenAdmin = serverAdmin;
 
   const loadAdminData = useCallback(async () => {
     setLoading(true);
@@ -46,10 +44,14 @@ export default function AdminCuratorPage() {
 
     try {
       const status = await getAdminStatus();
-      setServerAdmin(Boolean(status.data));
+      if (status.error) throw status.error;
 
-      if (status.error && !clientAdmin) {
-        throw status.error;
+      const authorized = Boolean(status.data);
+      setServerAdmin(authorized);
+      if (!authorized) {
+        setArtists([]);
+        setWithdrawals([]);
+        return;
       }
 
       const [artistsResult, withdrawalsResult] = await Promise.all([
@@ -58,7 +60,7 @@ export default function AdminCuratorPage() {
       ]);
 
       if (artistsResult.error) throw artistsResult.error;
-      if (withdrawalsResult.error && (clientAdmin || status.data)) throw withdrawalsResult.error;
+      if (withdrawalsResult.error) throw withdrawalsResult.error;
 
       setArtists(artistsResult.data || []);
       setWithdrawals(withdrawalsResult.data || []);
@@ -70,7 +72,7 @@ export default function AdminCuratorPage() {
     } finally {
       setLoading(false);
     }
-  }, [clientAdmin]);
+  }, []);
 
   useEffect(() => {
     if (user?.id) {

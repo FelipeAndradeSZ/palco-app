@@ -33,6 +33,9 @@ export default function LiveStreamPlayer({
   const hasMedia = useMemo(() => {
     return Boolean(stream?.getTracks?.().some((track) => track.readyState === 'live'));
   }, [stream]);
+  const hasVideo = useMemo(() => {
+    return Boolean(stream?.getVideoTracks?.().some((track) => track.readyState === 'live'));
+  }, [stream]);
 
   useEffect(() => {
     if (!videoRef.current) return;
@@ -58,7 +61,7 @@ export default function LiveStreamPlayer({
 
   return (
     <div className={`relative flex w-full items-center justify-center overflow-hidden rounded-2xl border border-palco-border bg-palco-black shadow-2xl ${className}`}>
-      {hasMedia ? (
+      {hasVideo ? (
         <video
           ref={videoRef}
           autoPlay
@@ -70,6 +73,16 @@ export default function LiveStreamPlayer({
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(212,168,67,0.18),transparent_32%),linear-gradient(180deg,rgba(31,33,39,0.94),rgba(5,5,6,0.98))]" />
       )}
 
+      {hasMedia && !hasVideo && (
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted={muted}
+          className="pointer-events-none absolute h-px w-px opacity-0"
+        />
+      )}
+
       {showStatus && (
         <div className="absolute left-4 top-4 z-10 flex items-center gap-2 rounded-full bg-palco-live px-3 py-1 text-xs font-bold uppercase tracking-widest text-white shadow-lg">
           <span className="h-2 w-2 rounded-full bg-white" />
@@ -77,14 +90,14 @@ export default function LiveStreamPlayer({
         </div>
       )}
 
-      {!hasMedia && (
+      {!hasVideo && (
         <div className="relative z-10 flex max-w-sm flex-col items-center px-6 text-center">
           <div className="flex h-24 w-24 items-center justify-center rounded-full border-4 border-palco-border bg-palco-dark text-4xl font-black text-palco-gold">
             {initial}
           </div>
           <h3 className="mt-4 font-display text-xl font-bold text-palco-text">{title}</h3>
           <p className="mt-2 text-sm text-palco-text-muted">{error || subtitle}</p>
-          {canStart && !isStarted && (
+          {canStart && !isStarted && !hasMedia && (
             <button
               type="button"
               onClick={onStart}
@@ -93,12 +106,12 @@ export default function LiveStreamPlayer({
               {actionLabel}
             </button>
           )}
-          {isStarted && !error && (
+          {isStarted && !error && !hasMedia && (
             <p className="mt-5 text-xs font-bold uppercase tracking-[0.18em] text-palco-gold">
               {STATUS_LABELS[status] || 'Conectando...'}
             </p>
           )}
-          {isStarted && error && onStart && (
+          {isStarted && error && onStart && !hasMedia && (
             <button
               type="button"
               onClick={onStart}

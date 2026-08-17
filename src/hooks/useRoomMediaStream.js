@@ -142,18 +142,37 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
 
       if (localStreamRef.current) return localStreamRef.current;
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: false,
-          channelCount: 1,
-        },
-        video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-      });
+      const audioConstraints = {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: false,
+        channelCount: 1,
+      };
+      let stream;
+
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: audioConstraints,
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+        });
+      } catch (mediaError) {
+        const canFallbackToAudio = ['NotFoundError', 'NotReadableError', 'OverconstrainedError']
+          .includes(mediaError?.name);
+        if (!canFallbackToAudio) throw mediaError;
+
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: audioConstraints,
+          video: false,
+        });
+      }
+
+      if (stream.getAudioTracks().length === 0) {
+        stream.getTracks().forEach((track) => track.stop());
+        throw new Error('Nenhum microfone foi encontrado.');
+      }
 
       stream.getAudioTracks().forEach((track) => {
         track.contentHint = 'music';
