@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useRoomRealtime } from '../hooks/useRoomRealtime';
 import { useRoomMediaStream } from '../hooks/useRoomMediaStream';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import { getRoomById, joinRoom, leaveRoom } from '../services/roomService';
 import { getWallet, addFundsCheckout } from '../services/walletService';
 import { createSongRequest, sendTip } from '../services/bountyService';
@@ -666,6 +667,7 @@ export default function RoomPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { profile } = useAuth();
+  const isDesktopLayout = useMediaQuery('(min-width: 1024px)');
   const [room, setRoom] = useState(null);
   const [wallet, setWallet] = useState({ balance: 0 });
   const [loading, setLoading] = useState(true);
@@ -957,7 +959,7 @@ export default function RoomPage() {
 
   return (
     <>
-      <div className="hidden lg:block">
+      {isDesktopLayout ? (
         <DesktopLiveRoom
           room={room}
           selectedArtist={selectedArtist}
@@ -1005,9 +1007,8 @@ export default function RoomPage() {
           handleCreateBattle={handleCreateBattle}
           handleBattleVote={handleBattleVote}
         />
-      </div>
-
-      <div className="mx-auto min-h-[calc(100vh-4rem)] max-w-7xl px-3 py-4 sm:px-5 lg:hidden">
+      ) : (
+      <div className="mx-auto min-h-[calc(100vh-4rem)] max-w-7xl px-3 py-4 sm:px-5">
         <section className="relative h-[calc(100svh-5.5rem)] min-h-[600px] max-h-[880px] overflow-hidden rounded-3xl border border-palco-border bg-palco-black">
           <LiveStreamPlayer
             stream={listenerMedia.remoteStream}
@@ -1178,6 +1179,7 @@ export default function RoomPage() {
           </div>
         )}
       </div>
+      )}
 
       <RequestSongModal
         isOpen={isModalOpen}
