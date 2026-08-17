@@ -1,4 +1,6 @@
-export const LIVE_PRESENCE_TIMEOUT_MS = 90_000;
+// Browsers throttle background tabs aggressively. Five minutes keeps a live
+// audio session discoverable while still allowing abandoned shows to expire.
+export const LIVE_PRESENCE_TIMEOUT_MS = 5 * 60_000;
 
 export function isLiveArtistEntry(entry, now = Date.now()) {
   if (!entry || (entry.status && entry.status !== 'live')) return false;
