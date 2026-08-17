@@ -4,6 +4,7 @@ import {
   validateBountyValue,
   validateChatMessage,
   validateBrazilState,
+  validateContactPhone,
   validatePassword,
   validateProfessionalUrl,
   validateSongTitle,
@@ -55,5 +56,11 @@ describe('PALCO input validation', () => {
   it('normalizes Brazilian state abbreviations', () => {
     expect(validateBrazilState(' pr ')).toEqual({ valid: true, sanitized: 'PR' });
     expect(validateBrazilState('Parana').valid).toBe(false);
+  });
+
+  it('validates private booking contact phones', () => {
+    expect(validateContactPhone('(41) 99999-9999', { required: true }))
+      .toEqual({ valid: true, sanitized: '(41) 99999-9999' });
+    expect(validateContactPhone('sem telefone', { required: true }).valid).toBe(false);
   });
 });

@@ -1,15 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { saveOwnProfile } from '../services/profileService';
+import { getVenueProfile, upsertVenueProfile } from '../services/venueService';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import { BRAZIL_REGIONS, MUSIC_GENRES, USER_ROLE_LABELS } from '../lib/constants';
-import { validateBrazilState, validateName, validateProfessionalUrl } from '../lib/validators';
+import { validateBrazilState, validateContactPhone, validateName, validateProfessionalUrl } from '../lib/validators';
 
 export default function ProfilePage() {
   const { profile, refreshProfile } = useAuth();
   const artistDetails = profile?.artist_details?.[0] || profile?.artist_details || {};
+  const isArtist = profile?.role === 'artist';
+  const isVenue = profile?.role === 'venue';
   const [form, setForm] = useState({
     name: profile?.name || '',
     mainGenre: artistDetails.main_genre || '',
@@ -22,6 +25,7 @@ export default function ProfilePage() {
     state: artistDetails.state || '',
     region: artistDetails.region || '',
     availableForBooking: artistDetails.available_for_booking !== false,
+    contactPhone: '',
   });
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState(null);
@@ -30,7 +34,7 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!profile) return;
     const details = profile.artist_details?.[0] || profile.artist_details || {};
-    setForm({
+    setForm((current) => ({
       name: profile.name || '',
       mainGenre: details.main_genre || '',
       bio: details.bio || '',
@@ -42,10 +46,33 @@ export default function ProfilePage() {
       state: details.state || '',
       region: details.region || '',
       availableForBooking: details.available_for_booking !== false,
-    });
+      contactPhone: current.contactPhone,
+    }));
   }, [profile]);
 
-  const isArtist = profile?.role === 'artist';
+  useEffect(() => {
+    if (!isVenue || !profile?.id) return undefined;
+    let cancelled = false;
+
+    async function loadVenueProfile() {
+      const { data, error } = await getVenueProfile(profile.id);
+      if (cancelled) return;
+      if (error) {
+        setFeedback({ type: 'error', message: error.message || 'Nao foi possivel carregar o perfil do estabelecimento.' });
+        return;
+      }
+      setForm((current) => ({
+        ...current,
+        contactPhone: data?.contact_phone || '',
+        city: data?.city || '',
+        state: data?.state || '',
+        region: data?.preferred_region || '',
+      }));
+    }
+
+    void loadVenueProfile();
+    return () => { cancelled = true; };
+  }, [isVenue, profile?.id]);
 
   function updateField(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -70,13 +97,31 @@ export default function ProfilePage() {
       const urlResult = validateProfessionalUrl(form.instagramUrl);
       if (!urlResult.valid) throw new Error(urlResult.error);
 
+      const phoneResult = validateContactPhone(form.contactPhone, { required: isVenue });
+      if (!phoneResult.valid) throw new Error(phoneResult.error);
+      const artistPhoneResult = validateContactPhone(form.bookingWhatsapp, {
+        required: isArtist && form.availableForBooking,
+      });
+      if (!artistPhoneResult.valid) throw new Error(artistPhoneResult.error);
+
       const result = await saveOwnProfile({
         ...form,
         name: nameResult.sanitized,
         state: stateResult.sanitized,
         instagramUrl: urlResult.sanitized,
+        bookingWhatsapp: artistPhoneResult.sanitized,
       });
       if (result.error) throw result.error;
+
+      if (isVenue) {
+        const venueResult = await upsertVenueProfile(profile.id, {
+          contact_phone: phoneResult.sanitized,
+          city: form.city.trim() || null,
+          state: stateResult.sanitized,
+          preferred_region: form.region || null,
+        });
+        if (venueResult.error) throw venueResult.error;
+      }
 
       await refreshProfile();
       setFeedback({ type: 'success', message: 'Perfil atualizado.' });
@@ -144,6 +189,54 @@ export default function ProfilePage() {
                     ))}
                   </select>
                 </label>
+              )}
+
+              {isVenue && (
+                <>
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-medium text-palco-text-muted">WhatsApp do estabelecimento</span>
+                    <input
+                      required
+                      value={form.contactPhone}
+                      onChange={(event) => updateField('contactPhone', event.target.value)}
+                      className="w-full rounded-xl border border-palco-border bg-palco-dark px-4 py-3 text-sm text-palco-text outline-none focus:border-palco-gold"
+                      maxLength={30}
+                      placeholder="(41) 99999-9999"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-medium text-palco-text-muted">Cidade</span>
+                    <input
+                      value={form.city}
+                      onChange={(event) => updateField('city', event.target.value)}
+                      className="w-full rounded-xl border border-palco-border bg-palco-dark px-4 py-3 text-sm text-palco-text outline-none focus:border-palco-gold"
+                      maxLength={120}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-medium text-palco-text-muted">Estado</span>
+                    <input
+                      value={form.state}
+                      onChange={(event) => updateField('state', event.target.value.toUpperCase())}
+                      className="w-full rounded-xl border border-palco-border bg-palco-dark px-4 py-3 text-sm text-palco-text outline-none focus:border-palco-gold"
+                      maxLength={2}
+                      placeholder="PR"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-medium text-palco-text-muted">Regiao</span>
+                    <select
+                      value={form.region}
+                      onChange={(event) => updateField('region', event.target.value)}
+                      className="w-full rounded-xl border border-palco-border bg-palco-dark px-4 py-3 text-sm text-palco-text outline-none focus:border-palco-gold"
+                    >
+                      <option value="">Selecione</option>
+                      {BRAZIL_REGIONS.map((region) => (
+                        <option key={region.value} value={region.value}>{region.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                </>
               )}
 
               {isArtist && (

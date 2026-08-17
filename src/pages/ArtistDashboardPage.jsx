@@ -993,6 +993,11 @@ export default function ArtistDashboardPage() {
                     {request.message && (
                       <p className="mt-3 max-w-3xl text-sm leading-6 text-palco-text">{request.message}</p>
                     )}
+                    {request.venue_contact_phone && (
+                      <p className="mt-2 text-sm font-bold text-palco-success">
+                        Contato do estabelecimento: {request.venue_contact_phone}
+                      </p>
+                    )}
                   </div>
                   {request.status === 'pending' && (
                     <div className="flex shrink-0 gap-2">

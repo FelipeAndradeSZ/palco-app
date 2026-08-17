@@ -26,7 +26,7 @@ export async function upsertVenueProfile(profileId, updates) {
   return { data, error };
 }
 
-export async function createBookingRequest({ venueId, artistId, eventDate, city, state, budget, message }) {
+export async function createBookingRequest({ venueId, artistId, eventDate, city, state, budget, message, contactPhone }) {
   const payload = {
     venue_id: venueId,
     artist_id: artistId,
@@ -35,6 +35,7 @@ export async function createBookingRequest({ venueId, artistId, eventDate, city,
     state: state?.trim() || null,
     budget: budget ? Number(budget) : null,
     message: message?.trim() || null,
+    venue_contact_phone: contactPhone?.trim() || null,
   };
 
   const { data, error } = await supabase

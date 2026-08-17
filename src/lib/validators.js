@@ -141,6 +141,26 @@ export function validateBrazilState(state) {
   return { valid: true, sanitized };
 }
 
+export function validateContactPhone(phone, { required = false } = {}) {
+  const sanitized = sanitizeText(phone);
+  if (!sanitized) {
+    return required
+      ? { valid: false, error: 'Informe um telefone ou WhatsApp para contato.' }
+      : { valid: true, sanitized: null };
+  }
+
+  if (sanitized.length > 30 || !/^[0-9+() .-]+$/.test(sanitized)) {
+    return { valid: false, error: 'Informe um telefone valido com DDD.' };
+  }
+
+  const digits = sanitized.replace(/\D/g, '');
+  if (digits.length < 8 || digits.length > 15) {
+    return { valid: false, error: 'Informe um telefone valido com DDD.' };
+  }
+
+  return { valid: true, sanitized };
+}
+
 // ============================
 // Validação de Valor de Pedido
 // ============================

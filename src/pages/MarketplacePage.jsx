@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { searchArtists } from '../services/marketplaceService';
-import { createBookingRequest, getBookingRequests, updateBookingStatus } from '../services/venueService';
+import { createBookingRequest, getBookingRequests, getVenueProfile, updateBookingStatus } from '../services/venueService';
 import { BRAZIL_REGIONS, MUSIC_GENRES, QUALITY_TIER_LABELS } from '../lib/constants';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Spinner from '../components/ui/Spinner';
-import { validateBrazilState } from '../lib/validators';
+import { validateBrazilState, validateContactPhone } from '../lib/validators';
 
 const EMPTY_BOOKING_FORM = Object.freeze({
   eventDate: '',
@@ -15,6 +15,7 @@ const EMPTY_BOOKING_FORM = Object.freeze({
   state: '',
   budget: '',
   message: '',
+  contactPhone: '',
 });
 
 function formatBookingDate(value) {
@@ -42,6 +43,7 @@ export default function MarketplacePage() {
   const [bookingForm, setBookingForm] = useState(EMPTY_BOOKING_FORM);
   const [feedback, setFeedback] = useState(null);
   const [bookingRequests, setBookingRequests] = useState([]);
+  const [venueProfile, setVenueProfile] = useState(null);
 
   const loadArtists = useCallback(async (nextFilters = {}) => {
     setLoading(true);
@@ -58,12 +60,16 @@ export default function MarketplacePage() {
 
   const loadVenueBookings = useCallback(async () => {
     if (profileRole !== 'venue' || !profileId) return;
-    const { data, error } = await getBookingRequests(profileId, 'venue');
-    if (error) {
-      setFeedback({ type: 'error', message: error.message || 'Nao foi possivel carregar suas solicitacoes.' });
+    const [bookingsResult, venueResult] = await Promise.all([
+      getBookingRequests(profileId, 'venue'),
+      getVenueProfile(profileId),
+    ]);
+    if (bookingsResult.error || venueResult.error) {
+      setFeedback({ type: 'error', message: bookingsResult.error?.message || venueResult.error?.message || 'Nao foi possivel carregar suas solicitacoes.' });
       return;
     }
-    setBookingRequests(data || []);
+    setBookingRequests(bookingsResult.data || []);
+    setVenueProfile(venueResult.data || null);
   }, [profileId, profileRole]);
 
   useEffect(() => {
@@ -80,7 +86,10 @@ export default function MarketplacePage() {
 
   function openBooking(artist) {
     setBookingArtist(artist);
-    setBookingForm(EMPTY_BOOKING_FORM);
+    setBookingForm({
+      ...EMPTY_BOOKING_FORM,
+      contactPhone: venueProfile?.contact_phone || '',
+    });
     setFeedback(null);
   }
 
@@ -116,6 +125,9 @@ export default function MarketplacePage() {
         throw new Error('Informe um orcamento valido.');
       }
 
+      const phoneResult = validateContactPhone(bookingForm.contactPhone, { required: true });
+      if (!phoneResult.valid) throw new Error(phoneResult.error);
+
       const { error } = await createBookingRequest({
         venueId: profile.id,
         artistId: artist.id,
@@ -124,6 +136,7 @@ export default function MarketplacePage() {
         state: stateResult.sanitized,
         budget,
         message: bookingForm.message.trim() || `Tenho interesse em contratar ${artist.name} para uma apresentacao presencial.`,
+        contactPhone: phoneResult.sanitized,
       });
 
       if (error) throw error;
@@ -229,6 +242,11 @@ export default function MarketplacePage() {
                     {request.city ? ` - ${request.city}${request.state ? `/${request.state}` : ''}` : ''}
                   </p>
                   <p className="mt-1 text-xs font-bold text-palco-gold">{formatMoney(request.budget)}</p>
+                  {request.status === 'accepted' && request.artist_contact_phone && (
+                    <p className="mt-2 text-xs font-bold text-palco-success">
+                      Contato do artista: {request.artist_contact_phone}
+                    </p>
+                  )}
                 </div>
                 {['pending', 'accepted'].includes(request.status) && (
                   <Button
@@ -370,6 +388,17 @@ export default function MarketplacePage() {
                   step="0.01"
                   value={bookingForm.budget}
                   onChange={(event) => updateBookingField('budget', event.target.value)}
+                  className="w-full rounded-lg border border-palco-border bg-palco-dark px-4 py-3 text-sm text-palco-text outline-none focus:border-palco-gold"
+                />
+              </label>
+              <label className="block sm:col-span-2">
+                <span className="mb-2 block text-sm font-bold text-palco-text-muted">Seu WhatsApp para retorno</span>
+                <input
+                  required
+                  maxLength={30}
+                  value={bookingForm.contactPhone}
+                  onChange={(event) => updateBookingField('contactPhone', event.target.value)}
+                  placeholder="(41) 99999-9999"
                   className="w-full rounded-lg border border-palco-border bg-palco-dark px-4 py-3 text-sm text-palco-text outline-none focus:border-palco-gold"
                 />
               </label>
