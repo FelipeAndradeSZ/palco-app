@@ -489,7 +489,7 @@ function DesktopLiveRoom({
   messages,
   realtimeError,
   sendChatMessage,
-  profile,
+  canInteract,
   wallet,
   creditAmount,
   setCreditAmount,
@@ -609,7 +609,7 @@ function DesktopLiveRoom({
         </div>
 
         <aside className="space-y-4 xl:sticky xl:top-20 xl:self-start">
-          {profile?.role === 'listener' && (
+          {canInteract && (
             <WalletTopUp
               wallet={wallet}
               creditAmount={creditAmount}
@@ -620,7 +620,7 @@ function DesktopLiveRoom({
               onAddFunds={handleAddFunds}
             />
           )}
-          {profile?.role === 'listener' && (
+          {canInteract && (
             <LiveActions
               activeAction={activeAction}
               setActiveAction={setActiveAction}
@@ -639,7 +639,7 @@ function DesktopLiveRoom({
               feedback={feedback}
             />
           )}
-          {profile?.role === 'listener' && (
+          {canInteract && (
             <BattlePanel
               selectedArtist={selectedArtist}
               activeArtists={activeArtists}
@@ -698,6 +698,7 @@ export default function RoomPage() {
   const selectedArtist = selectedArtistId
     ? activeArtists.find((artist) => artist.id === selectedArtistId) || null
     : null;
+  const canInteract = Boolean(profile?.id && selectedArtist && profile.id !== selectedArtist.id);
 
   const [incomingLike, setIncomingLike] = useState(null);
   const handleIncomingLike = useCallback((payload) => {
@@ -969,7 +970,7 @@ export default function RoomPage() {
           messages={messages}
           realtimeError={realtimeError}
           sendChatMessage={sendChatMessage}
-          profile={profile}
+          canInteract={canInteract}
           wallet={wallet}
           creditAmount={creditAmount}
           setCreditAmount={setCreditAmount}
@@ -1077,7 +1078,7 @@ export default function RoomPage() {
             </div>
           </div>
 
-          {profile?.role === 'listener' && (
+          {canInteract && (
             <div className="pointer-events-auto absolute right-3 top-1/2 z-40 flex -translate-y-1/2 flex-col gap-3">
               {[
                 ['request', '♪'],
@@ -1117,7 +1118,7 @@ export default function RoomPage() {
           )}
         </section>
 
-        {profile?.role === 'listener' && (
+        {canInteract && (
           <div className="mt-3">
             <WalletTopUp
               wallet={wallet}
@@ -1131,13 +1132,13 @@ export default function RoomPage() {
           </div>
         )}
 
-        {profile?.role === 'listener' && activeAction === 'request' && feedback && (
+        {canInteract && activeAction === 'request' && feedback && (
           <div className="mt-3">
             <Alert type={feedback.type} message={feedback.message} />
           </div>
         )}
 
-        {profile?.role === 'listener' && activeAction !== 'request' && (
+        {canInteract && activeAction !== 'request' && (
           <div className="mt-3">
             <LiveActions
               activeAction={activeAction}
@@ -1159,7 +1160,7 @@ export default function RoomPage() {
           </div>
         )}
 
-        {profile?.role === 'listener' && (
+        {canInteract && (
           <div className="mt-3">
             <BattlePanel
               selectedArtist={selectedArtist}
@@ -1182,7 +1183,7 @@ export default function RoomPage() {
       )}
 
       <RequestSongModal
-        isOpen={isModalOpen}
+        isOpen={isModalOpen && canInteract}
         onClose={() => setIsModalOpen(false)}
         onSubmit={handleSongRequest}
         currentBalance={wallet?.balance || 0}
