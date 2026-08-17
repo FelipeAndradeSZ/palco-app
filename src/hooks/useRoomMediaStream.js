@@ -677,10 +677,12 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
         }
         if (subscriptionStatus !== 'SUBSCRIBED' || mediaStarted) return;
         mediaStarted = true;
+        let artistMediaReady = false;
 
         try {
           if (role === 'artist') {
             await ensureArtistMedia();
+            artistMediaReady = true;
             setStatus('ready');
             await sendSignal('artist-ready', { artistId });
           } else {
@@ -689,7 +691,9 @@ export function useRoomMediaStream({ roomId, artistId, role, enabled }) {
         } catch (err) {
           console.error('[PALCO media] erro ao iniciar mídia:', err);
           setError(role === 'artist'
-            ? 'Permita câmera e microfone para transmitir.'
+            ? artistMediaReady
+              ? 'Nao foi possivel conectar a transmissao com esta sala.'
+              : 'Permita câmera e microfone para transmitir.'
             : 'Não foi possível conectar ao artista. Tente novamente.'
           );
           setStatus('error');
