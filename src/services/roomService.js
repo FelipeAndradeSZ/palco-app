@@ -30,12 +30,7 @@ function onlyLiveArtists(room) {
   };
 }
 
-async function expireStalePresence() {
-  await supabase.rpc('expire_stale_room_presence');
-}
-
 export async function getRooms() {
-  await expireStalePresence();
   const enhanced = await supabase
     .from('rooms')
     .select(MULTI_ARTIST_ROOM_SELECT)
@@ -47,7 +42,6 @@ export async function getRooms() {
 }
 
 export async function getRoomById(roomId) {
-  await expireStalePresence();
   const enhanced = await supabase
     .from('rooms')
     .select(MULTI_ARTIST_ROOM_SELECT)

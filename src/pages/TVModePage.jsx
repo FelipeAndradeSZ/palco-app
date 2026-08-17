@@ -212,10 +212,18 @@ export default function TVModePage() {
 
     refreshPresence();
     const timer = setInterval(refreshPresence, 25_000);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void refreshPresence();
+    };
+    const refreshWhenOnline = () => void refreshPresence();
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    window.addEventListener('online', refreshWhenOnline);
 
     return () => {
       cancelled = true;
       clearInterval(timer);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+      window.removeEventListener('online', refreshWhenOnline);
       setPresenceRoomId((current) => current === activeRoomId ? null : current);
       void leaveRoom(activeRoomId, profile.id);
     };

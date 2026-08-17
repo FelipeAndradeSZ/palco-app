@@ -292,10 +292,18 @@ export default function ArtistDashboardPage() {
 
     heartbeat();
     const timer = setInterval(heartbeat, 25_000);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void heartbeat();
+    };
+    const refreshWhenOnline = () => void heartbeat();
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    window.addEventListener('online', refreshWhenOnline);
 
     return () => {
       cancelled = true;
       clearInterval(timer);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+      window.removeEventListener('online', refreshWhenOnline);
     };
   }, [activeRoomId, profile?.id]);
 

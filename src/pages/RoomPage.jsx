@@ -732,6 +732,12 @@ export default function RoomPage() {
   useEffect(() => {
     let isMounted = true;
     let presenceTimer = null;
+    let refreshPresence = null;
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void refreshPresence?.();
+    };
+    const refreshWhenOnline = () => void refreshPresence?.();
 
     async function setupRoom() {
       if (isMounted) {
@@ -749,7 +755,7 @@ export default function RoomPage() {
       if (isMounted) setRoom(roomData);
 
       if (profile?.id) {
-        async function refreshPresence() {
+        refreshPresence = async function refreshRoomPresence() {
           const joinResult = await joinRoom(roomId);
           if (!isMounted) {
             if (!joinResult.error) await leaveRoom(roomId, profile.id);
@@ -762,11 +768,13 @@ export default function RoomPage() {
             setPresenceReady(true);
           }
           return !joinResult.error;
-        }
+        };
 
         await refreshPresence();
         if (!isMounted) return;
         presenceTimer = setInterval(refreshPresence, 25_000);
+        document.addEventListener('visibilitychange', refreshWhenVisible);
+        window.addEventListener('online', refreshWhenOnline);
 
         const { data: walletData } = await getWallet(profile.id);
         if (isMounted && walletData) setWallet(walletData);
@@ -780,11 +788,13 @@ export default function RoomPage() {
     return () => {
       isMounted = false;
       clearInterval(presenceTimer);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+      window.removeEventListener('online', refreshWhenOnline);
       if (profile?.id) {
         void leaveRoom(roomId, profile.id);
       }
     };
-  }, [roomId, profile, navigate]);
+  }, [navigate, profile?.id, roomId]);
 
   const handleSelectArtist = (artistId) => {
     setSelectedArtistId(artistId);
