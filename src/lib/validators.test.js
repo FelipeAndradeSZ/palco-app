@@ -22,6 +22,14 @@ describe('PALCO input validation', () => {
     expect(validateBountyValue(500.01).valid).toBe(false);
   });
 
+  it('rejects fractions smaller than one cent', () => {
+    expect(validateBountyValue('10.001')).toEqual({
+      valid: false,
+      error: 'Use no maximo duas casas decimais.',
+    });
+    expect(validateBountyValue('10.01')).toEqual({ valid: true });
+  });
+
   it('rejects weak passwords', () => {
     expect(validatePassword('musica12').valid).toBe(false);
     expect(validatePassword('Musica12').valid).toBe(true);

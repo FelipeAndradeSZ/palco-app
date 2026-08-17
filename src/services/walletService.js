@@ -37,8 +37,11 @@ export async function getWallet(profileId) {
  */
 export async function addFundsCheckout(amount, userId, returnTo = '/rooms') {
   const checkoutAmount = Number(amount);
-  if (!Number.isFinite(checkoutAmount) || checkoutAmount < 5) {
-    throw new Error('Valor mínimo para adicionar créditos é R$ 5,00.');
+  if (!Number.isFinite(checkoutAmount) || checkoutAmount < 5 || checkoutAmount > 5000) {
+    throw new Error('O valor deve ficar entre R$ 5,00 e R$ 5.000,00.');
+  }
+  if (Math.abs(checkoutAmount * 100 - Math.round(checkoutAmount * 100)) > 1e-8) {
+    throw new Error('Use no maximo duas casas decimais.');
   }
 
   const { data, error } = await supabase.functions.invoke('create-checkout', {

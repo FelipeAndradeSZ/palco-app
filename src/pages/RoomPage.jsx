@@ -372,6 +372,11 @@ function BattlePanel({
   const currentBattle = activeBattles.find((battle) =>
     [battle.challenger_artist_id, battle.opponent_artist_id].includes(selectedArtist.id)
   );
+  const battleStatusLabel = currentBattle?.status === 'pending'
+    ? 'Aguardando o artista desafiado aceitar'
+    : currentBattle?.status === 'active'
+      ? 'Batalha aceita. Os artistas ainda vao abrir a votacao'
+      : 'Votacao aberta para o publico';
   const opponents = activeArtists.filter((artist) => artist.id !== selectedArtist.id);
 
   function countVotes(battleId, artistId) {
@@ -389,7 +394,7 @@ function BattlePanel({
           <div className="rounded-xl border border-palco-gold/30 bg-palco-gold/10 p-3">
             <p className="font-display text-lg font-black text-white">{currentBattle.song_title}</p>
             <p className="mt-1 text-xs text-palco-text-muted">
-              {currentBattle.status === 'pending' ? 'Aguardando aceite dos artistas' : 'Votacao aberta para o publico'}
+              {battleStatusLabel}
             </p>
           </div>
 
@@ -407,6 +412,7 @@ function BattlePanel({
             ))}
           </div>
 
+          {currentBattle.status === 'voting' && (
           <div className="space-y-3">
             {BATTLE_CATEGORIES.map((category) => (
               <div key={category.key} className="rounded-xl border border-white/10 bg-black/25 p-2">
@@ -431,6 +437,7 @@ function BattlePanel({
               </div>
             ))}
           </div>
+          )}
         </div>
       ) : opponents.length > 0 ? (
         <form onSubmit={onCreateBattle} className="mt-4 space-y-3">

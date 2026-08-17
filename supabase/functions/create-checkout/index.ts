@@ -53,6 +53,10 @@ serve(async (req) => {
       throw new HttpError(422, 'O valor deve ficar entre R$ 5 e R$ 5.000')
     }
 
+    if (Math.abs(checkoutAmount * 100 - Math.round(checkoutAmount * 100)) > 1e-8) {
+      throw new HttpError(422, 'Use no maximo duas casas decimais')
+    }
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [

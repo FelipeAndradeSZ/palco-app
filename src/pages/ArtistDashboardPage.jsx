@@ -5,7 +5,7 @@ import { useRooms } from '../hooks/useRooms';
 import { useRoomRealtime } from '../hooks/useRoomRealtime';
 import { useRoomMediaStream } from '../hooks/useRoomMediaStream';
 import { heartbeatArtistLive, updateRoomArtist } from '../services/roomService';
-import { acceptBattle, cancelBattle, finishBattle, startBattleVoting } from '../services/battleService';
+import { acceptBattle, cancelBattle, createBattle, finishBattle, startBattleVoting } from '../services/battleService';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
@@ -21,12 +21,15 @@ import { getActiveArtists, roomHasArtist } from '../lib/roomArtists';
 import { getWallet, requestWithdrawal, getWithdrawalRequests, getTransactions } from '../services/walletService';
 import { getBookingRequests, updateBookingStatus } from '../services/venueService';
 
-function ArtistBattleControls({ battles, profileId, onChanged }) {
+function ArtistBattleControls({ battles, profileId, roomId, activeArtists, onChanged }) {
   const [processingId, setProcessingId] = useState(null);
   const [feedback, setFeedback] = useState(null);
+  const [opponentId, setOpponentId] = useState('');
+  const [songTitle, setSongTitle] = useState('');
   const artistBattles = battles.filter((battle) =>
     [battle.challenger_artist_id, battle.opponent_artist_id].includes(profileId)
   );
+  const opponents = activeArtists.filter((artist) => artist.id !== profileId);
 
   async function runAction(battleId, action, successMessage) {
     setProcessingId(battleId);
@@ -46,7 +49,34 @@ function ArtistBattleControls({ battles, profileId, onChanged }) {
     }
   }
 
-  if (artistBattles.length === 0) return null;
+  async function createChallenge(event) {
+    event.preventDefault();
+    const cleanSongTitle = songTitle.trim();
+    if (!opponentId || !cleanSongTitle) return;
+
+    setProcessingId('new');
+    setFeedback(null);
+    try {
+      const { error } = await createBattle({
+        roomId,
+        challengerArtistId: profileId,
+        opponentArtistId: opponentId,
+        songTitle: cleanSongTitle,
+        bountyValue: 0,
+      });
+      if (error) throw error;
+      setOpponentId('');
+      setSongTitle('');
+      setFeedback({ type: 'success', message: 'Desafio enviado ao outro artista.' });
+      if (onChanged) await onChanged();
+    } catch (err) {
+      setFeedback({ type: 'error', message: err.message || 'Nao foi possivel criar o desafio.' });
+    } finally {
+      setProcessingId(null);
+    }
+  }
+
+  if (artistBattles.length === 0 && opponents.length === 0) return null;
 
   return (
     <section className="rounded-2xl border border-palco-gold/25 bg-palco-gold/10 p-4">
@@ -117,6 +147,36 @@ function ArtistBattleControls({ battles, profileId, onChanged }) {
           );
         })}
       </div>
+
+      {artistBattles.length === 0 && opponents.length > 0 && (
+        <form onSubmit={createChallenge} className="mt-4 grid gap-3 border-t border-palco-gold/20 pt-4 sm:grid-cols-2">
+          <select
+            value={opponentId}
+            onChange={(event) => setOpponentId(event.target.value)}
+            className="rounded-xl border border-white/10 bg-black/35 px-3 py-2 text-sm text-white outline-none focus:border-palco-gold"
+          >
+            <option value="">Escolha o outro artista</option>
+            {opponents.map((artist) => (
+              <option key={artist.id} value={artist.id}>{artist.name}</option>
+            ))}
+          </select>
+          <input
+            value={songTitle}
+            onChange={(event) => setSongTitle(event.target.value)}
+            maxLength={200}
+            placeholder="Musica do desafio"
+            className="rounded-xl border border-white/10 bg-black/35 px-3 py-2 text-sm text-white outline-none placeholder:text-palco-text-subtle focus:border-palco-gold"
+          />
+          <Button
+            type="submit"
+            className="sm:col-span-2"
+            disabled={!opponentId || !songTitle.trim()}
+            loading={processingId === 'new'}
+          >
+            Desafiar artista
+          </Button>
+        </form>
+      )}
     </section>
   );
 }
@@ -550,6 +610,8 @@ export default function ArtistDashboardPage() {
                 <ArtistBattleControls
                   battles={activeBattles}
                   profileId={profile?.id}
+                  roomId={activeRoomId}
+                  activeArtists={getActiveArtists(activeRoom)}
                   onChanged={refetchRooms}
                 />
                 <ArtistRequestQueue

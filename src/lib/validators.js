@@ -164,6 +164,10 @@ export function validateBountyValue(value) {
     return { valid: false, error: `Valor máximo é R$ ${BUSINESS_RULES.MAX_BOUNTY_VALUE.toFixed(2)}.` };
   }
 
+  if (Math.abs(numValue * 100 - Math.round(numValue * 100)) > 1e-8) {
+    return { valid: false, error: 'Use no maximo duas casas decimais.' };
+  }
+
   return { valid: true };
 }
 
