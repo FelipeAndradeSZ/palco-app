@@ -195,7 +195,8 @@ function WalletTopUp({ wallet, creditAmount, setCreditAmount, creditError, setCr
           <input
             type="number"
             min="5"
-            step="1"
+            max="5000"
+            step="0.01"
             value={creditAmount}
             onChange={(event) => {
               setCreditAmount(event.target.value);
@@ -688,6 +689,7 @@ export default function RoomPage() {
   const [tipAmount, setTipAmount] = useState(10);
   const [tipMessage, setTipMessage] = useState('');
   const [tipLoading, setTipLoading] = useState(false);
+  const tipOperationRef = useRef(null);
   const [feedback, setFeedback] = useState(null);
   const [presenceReady, setPresenceReady] = useState(false);
   const [battleSong, setBattleSong] = useState('');
@@ -873,13 +875,26 @@ export default function RoomPage() {
 
     setTipLoading(true);
     try {
-      const result = await sendTip(roomId, amount, sanitizeText(tipMessage), selectedArtist.id);
+      const cleanMessage = sanitizeText(tipMessage);
+      const signature = JSON.stringify({ roomId, artistId: selectedArtist.id, amount, message: cleanMessage });
+      if (!tipOperationRef.current || tipOperationRef.current.signature !== signature) {
+        tipOperationRef.current = { id: crypto.randomUUID(), signature };
+      }
+
+      const result = await sendTip(
+        roomId,
+        amount,
+        cleanMessage,
+        selectedArtist.id,
+        tipOperationRef.current.id
+      );
       if (result?.error) throw new Error(result.error.message);
 
       const { data } = await getWallet(profile.id);
       if (data) setWallet(data);
 
       setTipMessage('');
+      tipOperationRef.current = null;
       setFeedback({
         type: result?.data?.chat_warning ? 'warning' : 'success',
         message: result?.data?.chat_warning || 'Gorjeta enviada para o artista.',

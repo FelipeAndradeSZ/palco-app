@@ -36,6 +36,7 @@ export async function createSongRequest({
   bountyValue,
   dedication = null,
   targetArtistId = null,
+  clientRequestId,
 }) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: { message: 'Usuário não autenticado' } };
@@ -49,6 +50,7 @@ export async function createSongRequest({
     dedication: dedication ? dedication.trim() : null,
     status: 'pending',
     request_source: 'app',
+    client_request_id: clientRequestId,
   };
 
   const enhanced = await supabase
@@ -73,12 +75,23 @@ export async function createSongRequest({
         warning: 'Pedido pago e enviado para a fila, mas o aviso no chat nao foi publicado.',
       };
     }
+  } else if (enhanced.error.code === '23505' && clientRequestId) {
+    const existing = await supabase
+      .from('song_requests')
+      .select('*')
+      .eq('requester_id', user.id)
+      .eq('client_request_id', clientRequestId)
+      .maybeSingle();
+
+    if (!existing.error && existing.data) {
+      return { data: existing.data, error: null, recovered: true };
+    }
   }
 
   return enhanced;
 }
 
-export async function sendTip(roomId, amount, message, targetArtistId = null) {
+export async function sendTip(roomId, amount, message, targetArtistId = null, clientRequestId) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: { message: 'Usuário não autenticado' } };
 
@@ -92,14 +105,22 @@ export async function sendTip(roomId, amount, message, targetArtistId = null) {
     ? `Enviou R$ ${tipAmount.toFixed(2)} de gorjeta: ${cleanMessage}`
     : `Enviou R$ ${tipAmount.toFixed(2)} de gorjeta.`;
 
-  const rpcResult = await supabase.rpc('send_artist_tip', {
-    target_room_id: roomId,
-    target_artist_id: targetArtistId,
-    tip_amount: tipAmount,
-    tip_message: cleanMessage || null,
+  const rpcResult = await supabase.rpc('send_artist_tip_idempotent', {
+    p_room_id: roomId,
+    p_artist_id: targetArtistId,
+    p_amount: tipAmount,
+    p_message: cleanMessage || null,
+    p_client_request_id: clientRequestId,
   });
 
   if (!rpcResult.error) {
+    if (rpcResult.data?.created === false) {
+      return {
+        data: { ...rpcResult.data, recovered: true },
+        error: null,
+      };
+    }
+
     const messageResult = await sendMessage(roomId, user.id, content, 'tip_alert', targetArtistId);
     if (messageResult.error) {
       return {

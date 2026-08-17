@@ -2,7 +2,7 @@
  * RequestSongModal — Fluxo de pagamento e pedido musical
  */
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { validateSongTitle, validateBountyValue, validateDedication } from '../../../lib/validators';
 import { BOUNTY_PRESETS } from '../../../lib/constants';
 import Button from '../../ui/Button';
@@ -15,6 +15,7 @@ export default function RequestSongModal({ isOpen, onClose, onSubmit, currentBal
   const [dedication, setDedication] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const operationRef = useRef(null);
 
   if (!isOpen) return null;
 
@@ -38,15 +39,26 @@ export default function RequestSongModal({ isOpen, onClose, onSubmit, currentBal
 
     setLoading(true);
     try {
+      const signature = JSON.stringify({
+        songTitle: titleVal.sanitized,
+        bountyValue: Number(bountyValue),
+        dedication: dedicationVal.sanitized,
+      });
+      if (!operationRef.current || operationRef.current.signature !== signature) {
+        operationRef.current = { id: crypto.randomUUID(), signature };
+      }
+
       await onSubmit({
         songTitle: titleVal.sanitized,
         bountyValue: Number(bountyValue),
         dedication: dedicationVal.sanitized,
+        clientRequestId: operationRef.current.id,
       });
       // Fecha e limpa após sucesso
       setSongTitle('');
       setBountyValue(10);
       setDedication('');
+      operationRef.current = null;
       onClose();
     } catch (err) {
       setError(err.message || 'Erro ao processar pagamento.');
